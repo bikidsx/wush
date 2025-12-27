@@ -8,7 +8,7 @@ AI-powered Git workflow CLI that generates meaningful commits, creates PRs, and 
 ## Installation
 
 ```bash
-npm install -g wush-cli
+npm install -g wush
 ```
 
 ## Quick Start
