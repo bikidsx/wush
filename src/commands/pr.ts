@@ -133,12 +133,23 @@ async function createPR(token: string, head: string, base: string, title: string
     const octokit = new Octokit({ auth: token });
     
     // Get repo info from git remote
-    const { execSync } = await import('child_process');
-    const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf-8' }).trim();
+    const git = new GitService();
+    const remoteUrl = await git.getRemoteUrl();
+    
+    if (!remoteUrl) {
+      spinner.stop();
+      logger.error('No remote origin found. Please add a remote first:');
+      console.log(chalk.dim('  git remote add origin https://github.com/username/repo.git'));
+      return;
+    }
+    
     const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/);
     
     if (!match) {
-      throw new Error('Could not parse GitHub repository from remote URL');
+      spinner.stop();
+      logger.error('Could not parse GitHub repository from remote URL');
+      logger.info(`Remote URL: ${remoteUrl}`);
+      return;
     }
 
     const [, owner, repo] = match;
@@ -156,6 +167,12 @@ async function createPR(token: string, head: string, base: string, title: string
     logger.success(`PR created: ${pr.html_url}`);
   } catch (error: any) {
     spinner.stop();
-    logger.error(`Failed to create PR: ${error.message}`);
+    if (error.status === 422) {
+      logger.error('PR already exists or branch has no changes');
+    } else if (error.status === 401) {
+      logger.error('Invalid GitHub token. Run: wush config');
+    } else {
+      logger.error(`Failed to create PR: ${error.message}`);
+    }
   }
 }
