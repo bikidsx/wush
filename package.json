@@ -1,26 +1,54 @@
 {
   "name": "wush",
-  "version": "1.0.0",
-  "description": "AI-powered Git workflow CLI",
+  "version": "1.0.1",
+  "description": "AI-powered Git workflow CLI - smart commits, PRs, and security scanning",
   "type": "module",
   "bin": {
-    "wush": "./bin/wush"
+    "wush": "./dist/index.js"
   },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target node --format esm",
-    "start": "bun run src/index.ts",
-    "type-check": "tsc --noEmit",
-    "link": "bun link"
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --minify",
+    "prepublishOnly": "bun run build",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit"
   },
-  "keywords": ["git", "ai", "cli", "commit", "pr", "security"],
-  "author": "",
+  "keywords": [
+    "git",
+    "ai",
+    "cli",
+    "commit",
+    "pr",
+    "security",
+    "openai",
+    "gemini",
+    "claude",
+    "ollama",
+    "groq",
+    "developer-tools",
+    "productivity"
+  ],
+  "author": "https://github.com/bikidsx",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bikidsx/wush.git"
+  },
+  "homepage": "https://github.com/bikidsx/wush#readme",
+  "bugs": {
+    "url": "https://github.com/bikidsx/wush/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.1",
     "@google/generative-ai": "^0.21.0",
     "@octokit/rest": "^21.0.2",
-    "boxen": "^8.0.1",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "conf": "^13.0.1",

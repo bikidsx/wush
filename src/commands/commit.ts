@@ -6,6 +6,47 @@ import { createAIProvider } from '../services/ai/factory.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/config.js';
 
+const AI_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const THINKING_MESSAGES = [
+  '🧠 AI is thinking...',
+  '✨ Analyzing your changes...',
+  '🔍 Understanding the code...',
+  '💭 Crafting the perfect message...',
+  '🎯 Almost there...',
+];
+
+function createAISpinner(initialText: string) {
+  return ora({
+    text: initialText,
+    spinner: {
+      interval: 80,
+      frames: AI_SPINNER_FRAMES,
+    },
+    color: 'cyan',
+  });
+}
+
+async function animatedAIGeneration<T>(
+  task: () => Promise<T>,
+  spinner: ReturnType<typeof ora>
+): Promise<T> {
+  let messageIndex = 0;
+  
+  const interval = setInterval(() => {
+    messageIndex = (messageIndex + 1) % THINKING_MESSAGES.length;
+    spinner.text = chalk.cyan(THINKING_MESSAGES[messageIndex]);
+  }, 1500);
+
+  try {
+    const result = await task();
+    clearInterval(interval);
+    return result;
+  } catch (error) {
+    clearInterval(interval);
+    throw error;
+  }
+}
+
 export async function commitCommand(): Promise<void> {
   const git = new GitService();
 
@@ -16,7 +57,8 @@ export async function commitCommand(): Promise<void> {
   }
 
   // Get staged changes
-  const spinner = ora('Analyzing changes...').start();
+  const spinner = createAISpinner('🔍 Analyzing changes...');
+  spinner.start();
   const diff = await git.getStagedDiff();
 
   if (!diff) {
@@ -39,25 +81,42 @@ export async function commitCommand(): Promise<void> {
         logger.error('No changes to commit');
         process.exit(1);
       }
-      return commitWithDiff(newDiff, git, spinner);
+      return commitWithDiff(newDiff, git);
     }
     process.exit(0);
   }
 
-  await commitWithDiff(diff, git, spinner);
+  spinner.stop();
+  await commitWithDiff(diff, git);
 }
 
-async function commitWithDiff(diff: string, git: GitService, spinner: ReturnType<typeof ora>): Promise<void> {
-  spinner.text = 'Generating commit message...';
+async function commitWithDiff(diff: string, git: GitService): Promise<void> {
+  const spinner = createAISpinner(chalk.cyan(THINKING_MESSAGES[0]));
+  spinner.start();
   
   try {
     const ai = createAIProvider();
-    const response = await ai.generateCommitMessage(diff);
-    spinner.stop();
+    const response = await animatedAIGeneration(
+      () => ai.generateCommitMessage(diff),
+      spinner
+    );
+    
+    spinner.succeed(chalk.green('✨ Commit message generated!'));
 
     logger.newline();
-    logger.info('Suggested commit message:');
-    console.log(chalk.cyan(`\n  ${response.content}\n`));
+    
+    // Beautiful box for the commit message
+    const lines = response.content.split('\n');
+    const maxLen = Math.max(...lines.map(l => l.length), 50);
+    const border = '─'.repeat(maxLen + 2);
+    
+    console.log(chalk.cyan(`┌${border}┐`));
+    for (const line of lines) {
+      console.log(chalk.cyan('│ ') + chalk.white(line.padEnd(maxLen)) + chalk.cyan(' │'));
+    }
+    console.log(chalk.cyan(`└${border}┘`));
+    
+    logger.newline();
 
     const { action } = await inquirer.prompt([
       {
@@ -65,10 +124,10 @@ async function commitWithDiff(diff: string, git: GitService, spinner: ReturnType
         name: 'action',
         message: 'What would you like to do?',
         choices: [
-          { name: 'Accept', value: 'accept' },
-          { name: 'Edit', value: 'edit' },
-          { name: 'Regenerate', value: 'regenerate' },
-          { name: 'Cancel', value: 'cancel' },
+          { name: chalk.green('✓ Accept'), value: 'accept' },
+          { name: chalk.yellow('✎ Edit'), value: 'edit' },
+          { name: chalk.blue('↻ Regenerate'), value: 'regenerate' },
+          { name: chalk.red('✗ Cancel'), value: 'cancel' },
         ],
       },
     ]);
@@ -89,10 +148,26 @@ async function commitWithDiff(diff: string, git: GitService, spinner: ReturnType
         await performCommit(editedMessage, git);
         break;
       case 'regenerate':
-        spinner.start('Regenerating...');
-        const newResponse = await ai.generateCommitMessage(diff);
-        spinner.stop();
-        console.log(chalk.cyan(`\n  ${newResponse.content}\n`));
+        const regenSpinner = createAISpinner(chalk.cyan('🔄 Regenerating...'));
+        regenSpinner.start();
+        const newResponse = await animatedAIGeneration(
+          () => ai.generateCommitMessage(diff),
+          regenSpinner
+        );
+        regenSpinner.succeed(chalk.green('✨ New message generated!'));
+        
+        logger.newline();
+        const newLines = newResponse.content.split('\n');
+        const newMaxLen = Math.max(...newLines.map(l => l.length), 50);
+        const newBorder = '─'.repeat(newMaxLen + 2);
+        
+        console.log(chalk.cyan(`┌${newBorder}┐`));
+        for (const line of newLines) {
+          console.log(chalk.cyan('│ ') + chalk.white(line.padEnd(newMaxLen)) + chalk.cyan(' │'));
+        }
+        console.log(chalk.cyan(`└${newBorder}┘`));
+        logger.newline();
+        
         const { confirm } = await inquirer.prompt([
           {
             type: 'confirm',
@@ -110,20 +185,24 @@ async function commitWithDiff(diff: string, git: GitService, spinner: ReturnType
         break;
     }
   } catch (error: any) {
-    spinner.stop();
-    logger.error(`Failed to generate commit message: ${error.message}`);
+    spinner.fail(chalk.red('Failed to generate commit message'));
+    logger.error(error.message);
     process.exit(1);
   }
 }
 
 async function performCommit(message: string, git: GitService): Promise<void> {
-  const spinner = ora('Committing...').start();
+  const spinner = ora({
+    text: chalk.cyan('📝 Committing...'),
+    spinner: 'dots',
+    color: 'green',
+  }).start();
+  
   try {
     await git.commit(message);
-    spinner.stop();
-    logger.success('Committed successfully!');
+    spinner.succeed(chalk.green('🎉 Committed successfully!'));
   } catch (error: any) {
-    spinner.stop();
-    logger.error(`Commit failed: ${error.message}`);
+    spinner.fail(chalk.red('Commit failed'));
+    logger.error(error.message);
   }
 }

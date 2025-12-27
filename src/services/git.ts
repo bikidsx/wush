@@ -58,4 +58,14 @@ export class GitService {
   async deleteBranch(branch: string): Promise<void> {
     await this.git.deleteLocalBranch(branch);
   }
+
+  async getRemoteUrl(): Promise<string | null> {
+    try {
+      const remotes = await this.git.getRemotes(true);
+      const origin = remotes.find(r => r.name === 'origin');
+      return origin?.refs?.fetch || origin?.refs?.push || null;
+    } catch {
+      return null;
+    }
+  }
 }
