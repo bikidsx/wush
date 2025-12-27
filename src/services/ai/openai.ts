@@ -76,4 +76,32 @@ export class OpenAIProvider extends BaseAIProvider {
       },
     };
   }
+
+  async generateBranchName(description: string, type: string): Promise<AIResponse> {
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You generate short, descriptive git branch names. Use lowercase, hyphens for spaces. Max 30 chars. Return ONLY the branch name, no prefix, no explanation.',
+        },
+        {
+          role: 'user',
+          content: `Generate a ${type} branch name for: ${description}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 50,
+    });
+
+    return {
+      content: response.choices[0].message.content || '',
+      model: this.model,
+      usage: {
+        promptTokens: response.usage?.prompt_tokens || 0,
+        completionTokens: response.usage?.completion_tokens || 0,
+        totalTokens: response.usage?.total_tokens || 0,
+      },
+    };
+  }
 }

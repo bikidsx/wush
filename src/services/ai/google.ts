@@ -70,4 +70,24 @@ export class GoogleProvider extends BaseAIProvider {
       },
     };
   }
+
+  async generateBranchName(description: string, type: string): Promise<AIResponse> {
+    const model = this.client.getGenerativeModel({ 
+      model: this.model,
+      systemInstruction: 'You generate short, descriptive git branch names. Use lowercase, hyphens for spaces. Max 30 chars. Return ONLY the branch name, no prefix, no explanation.',
+    });
+    
+    const result = await model.generateContent(`Generate a ${type} branch name for: ${description}`);
+    const response = result.response;
+
+    return {
+      content: response.text().trim(),
+      model: this.model,
+      usage: {
+        promptTokens: response.usageMetadata?.promptTokenCount || 0,
+        completionTokens: response.usageMetadata?.candidatesTokenCount || 0,
+        totalTokens: response.usageMetadata?.totalTokenCount || 0,
+      },
+    };
+  }
 }

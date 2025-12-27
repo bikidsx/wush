@@ -76,4 +76,26 @@ export class AnthropicProvider extends BaseAIProvider {
       },
     };
   }
+
+  async generateBranchName(description: string, type: string): Promise<AIResponse> {
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 50,
+      system: 'You generate short, descriptive git branch names. Use lowercase, hyphens for spaces. Max 30 chars. Return ONLY the branch name, no prefix, no explanation.',
+      messages: [
+        { role: 'user', content: `Generate a ${type} branch name for: ${description}` },
+      ],
+    });
+
+    const content = response.content[0].type === 'text' ? response.content[0].text : '';
+    return {
+      content: content.trim(),
+      model: this.model,
+      usage: {
+        promptTokens: response.usage.input_tokens,
+        completionTokens: response.usage.output_tokens,
+        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+      },
+    };
+  }
 }

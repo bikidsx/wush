@@ -12,4 +12,5 @@ export abstract class BaseAIProvider {
   abstract generateCommitMessage(diff: string): Promise<AIResponse>;
   abstract generatePRDescription(commits: string[], diff: string): Promise<AIResponse>;
   abstract analyzeSecurityIssues(code: string, filename: string): Promise<AIResponse>;
+  abstract generateBranchName(description: string, type: string): Promise<AIResponse>;
 }

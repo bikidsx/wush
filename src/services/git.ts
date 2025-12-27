@@ -1,4 +1,4 @@
-import simpleGit, { SimpleGit, DiffResult } from 'simple-git';
+import simpleGit, { SimpleGit, BranchSummary } from 'simple-git';
 
 export class GitService {
   private git: SimpleGit;
@@ -41,5 +41,21 @@ export class GitService {
 
   async stageAll(): Promise<void> {
     await this.git.add('.');
+  }
+
+  async createBranch(name: string): Promise<void> {
+    await this.git.checkoutLocalBranch(name);
+  }
+
+  async getBranches(): Promise<BranchSummary> {
+    return await this.git.branch();
+  }
+
+  async checkout(branch: string): Promise<void> {
+    await this.git.checkout(branch);
+  }
+
+  async deleteBranch(branch: string): Promise<void> {
+    await this.git.deleteLocalBranch(branch);
   }
 }

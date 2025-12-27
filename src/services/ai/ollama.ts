@@ -70,4 +70,24 @@ export class OllamaProvider extends BaseAIProvider {
       },
     };
   }
+
+  async generateBranchName(description: string, type: string): Promise<AIResponse> {
+    const response = await this.client.chat({
+      model: this.model,
+      messages: [
+        { role: 'system', content: 'You generate short, descriptive git branch names. Use lowercase, hyphens for spaces. Max 30 chars. Return ONLY the branch name, no prefix, no explanation.' },
+        { role: 'user', content: `Generate a ${type} branch name for: ${description}` },
+      ],
+    });
+
+    return {
+      content: response.message.content.trim(),
+      model: this.model,
+      usage: {
+        promptTokens: response.prompt_eval_count || 0,
+        completionTokens: response.eval_count || 0,
+        totalTokens: (response.prompt_eval_count || 0) + (response.eval_count || 0),
+      },
+    };
+  }
 }

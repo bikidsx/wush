@@ -8,6 +8,7 @@ import { prCommand } from './commands/pr.js';
 import { scanCommand } from './commands/scan.js';
 import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
+import { branchCommand } from './commands/branch.js';
 
 const program = new Command();
 
@@ -70,6 +71,18 @@ program
   .action(async () => {
     await ensureSetup();
     await statusCommand();
+  });
+
+// Branch command
+program
+  .command('branch')
+  .alias('b')
+  .description('Create a new branch with AI-generated name')
+  .option('-n, --name <name>', 'Branch name')
+  .option('-t, --type <type>', 'Branch type (feature, fix, hotfix, etc.)')
+  .action(async (options) => {
+    await ensureSetup();
+    await branchCommand(options);
   });
 
 // Config command
