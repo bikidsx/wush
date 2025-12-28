@@ -29,16 +29,47 @@ export async function prCommand(options: PROptions): Promise<void> {
 
   const currentBranch = await git.getCurrentBranch();
   
+  // Get all branches
+  const branchSummary = await git.getBranches();
+  const allBranches = branchSummary.all
+    .filter(b => b !== currentBranch && !b.startsWith('remotes/'))
+    .map(b => b.replace('origin/', ''));
+  
+  // Also get remote branches
+  const remoteBranches = branchSummary.all
+    .filter(b => b.startsWith('remotes/origin/') && !b.includes('HEAD'))
+    .map(b => b.replace('remotes/origin/', ''))
+    .filter(b => b !== currentBranch);
+  
+  // Combine and dedupe
+  const availableBranches = [...new Set([...allBranches, ...remoteBranches])];
+  
   // Determine target branch
   let targetBranch = options.target;
   if (!targetBranch) {
+    if (availableBranches.length === 0) {
+      logger.error('No other branches found to create PR against');
+      process.exit(1);
+    }
+
+    // Sort with common branches first
+    const priorityBranches = ['main', 'master', 'dev', 'develop', 'staging'];
+    const sortedBranches = availableBranches.sort((a, b) => {
+      const aIndex = priorityBranches.indexOf(a);
+      const bIndex = priorityBranches.indexOf(b);
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
     const { branch } = await inquirer.prompt([
       {
         type: 'list',
         name: 'branch',
-        message: 'Select target branch:',
-        choices: ['main', 'master', 'dev', 'develop', 'staging'],
-        default: config.github.defaultBranch,
+        message: `Select target branch (current: ${chalk.cyan(currentBranch)}):`,
+        choices: sortedBranches,
+        default: sortedBranches.find(b => b === config.github.defaultBranch) || sortedBranches[0],
       },
     ]);
     targetBranch = branch;
