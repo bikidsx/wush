@@ -21,6 +21,11 @@ export class GitService {
     return diff;
   }
 
+  async getDiff(base: string, head: string = 'HEAD'): Promise<string> {
+    const diff = await this.git.diff([`${base}..${head}`]);
+    return diff;
+  }
+
   async getStatus(): Promise<any> {
     return await this.git.status();
   }

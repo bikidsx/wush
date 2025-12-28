@@ -39,6 +39,12 @@ export interface Config {
       blockOnLow: boolean;
     };
   };
+  templates: {
+    commit: Record<string, string>;
+    pr: Record<string, string>;
+    activeCommitTemplate: string;
+    activePrTemplate: string;
+  };
 }
 
 export interface ProviderConfig {

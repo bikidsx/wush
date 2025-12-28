@@ -6,6 +6,7 @@ import { GitService } from '../services/git.js';
 import { createAIProvider } from '../services/ai/factory.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/config.js';
+import { applyTemplate } from '../utils/templates.js';
 
 interface PROptions {
   target?: string;
@@ -88,21 +89,38 @@ export async function prCommand(options: PROptions): Promise<void> {
 
     spinner.text = 'Generating PR description...';
     
-    const diff = await git.getStagedDiff();
+    const prDiff = await git.getDiff(targetBranch!);
     const ai = createAIProvider();
-    const response = await ai.generatePRDescription(commits, diff || '');
+    const response = await ai.generatePRDescription(commits, prDiff || '');
     
     spinner.stop();
 
     // Parse title and body from response
     const lines = response.content.split('\n');
-    const title = lines[0].replace(/^#\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
-    const body = lines.slice(1).join('\n').trim();
+    const aiTitle = lines[0].replace(/^#\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
+    const aiBody = lines.slice(1).join('\n').trim();
+
+    const templatedPR = await applyTemplate('pr', {
+      summary: aiTitle,
+      description: aiBody,
+      changes: prDiff,
+    });
+
+    const templatedLines = templatedPR.split('\n');
+    let title = templatedLines[0].trim();
+    let body = templatedLines.slice(1).join('\n').trim();
 
     logger.newline();
     logger.info(`Found ${commits.length} commits`);
     logger.newline();
-    console.log(chalk.bold('Title:'), chalk.cyan(title));
+    
+    if (templatedPR !== `${aiTitle}\n\n${aiBody}`) {
+      console.log(chalk.bold('AI Generated Title:'), chalk.dim(aiTitle));
+      console.log(chalk.bold('Final Title (Templated):'), chalk.cyan(title));
+    } else {
+      console.log(chalk.bold('Title:'), chalk.cyan(title));
+    }
+
     console.log(chalk.bold('\nDescription:'));
     console.log(chalk.dim(body));
     logger.newline();

@@ -5,6 +5,7 @@ import { GitService } from '../services/git.js';
 import { createAIProvider } from '../services/ai/factory.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/config.js';
+import { parseConventionalCommit, applyTemplate } from '../utils/templates.js';
 
 const AI_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const THINKING_MESSAGES = [
@@ -24,6 +25,18 @@ function createAISpinner(initialText: string) {
     },
     color: 'cyan',
   });
+}
+
+function displayCommitBox(message: string) {
+  const lines = message.split('\n');
+  const maxLen = Math.max(...lines.map(l => l.length), 50);
+  const border = '─'.repeat(maxLen + 2);
+  
+  console.log(chalk.cyan(`┌${border}┐`));
+  for (const line of lines) {
+    console.log(chalk.cyan('│ ') + chalk.white(line.padEnd(maxLen)) + chalk.cyan(' │'));
+  }
+  console.log(chalk.cyan(`└${border}┘`));
 }
 
 async function animatedAIGeneration<T>(
@@ -102,21 +115,36 @@ async function commitWithDiff(diff: string, git: GitService): Promise<void> {
     );
     
     spinner.succeed(chalk.green('✨ Commit message generated!'));
+    logger.newline();
 
-    logger.newline();
-    
-    // Beautiful box for the commit message
-    const lines = response.content.split('\n');
-    const maxLen = Math.max(...lines.map(l => l.length), 50);
-    const border = '─'.repeat(maxLen + 2);
-    
-    console.log(chalk.cyan(`┌${border}┐`));
-    for (const line of lines) {
-      console.log(chalk.cyan('│ ') + chalk.white(line.padEnd(maxLen)) + chalk.cyan(' │'));
+    let finalMessage = response.content;
+    const parsed = parseConventionalCommit(response.content);
+    const templatedMessage = await applyTemplate('commit', parsed);
+
+    if (templatedMessage !== response.content) {
+      console.log(chalk.bold('AI Generated (Raw):'));
+      displayCommitBox(response.content);
+      logger.newline();
+      console.log(chalk.bold('With Active Template Applied:'));
+      displayCommitBox(templatedMessage);
+      logger.newline();
+
+      const { mode } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'mode',
+          message: 'Which version would you like to use?',
+          choices: [
+            { name: 'Templated Version', value: 'templated' },
+            { name: 'Raw AI Version', value: 'raw' },
+          ],
+        },
+      ]);
+      finalMessage = mode === 'templated' ? templatedMessage : response.content;
+    } else {
+      displayCommitBox(finalMessage);
+      logger.newline();
     }
-    console.log(chalk.cyan(`└${border}┘`));
-    
-    logger.newline();
 
     const { action } = await inquirer.prompt([
       {
@@ -134,7 +162,7 @@ async function commitWithDiff(diff: string, git: GitService): Promise<void> {
 
     switch (action) {
       case 'accept':
-        await performCommit(response.content, git);
+        await performCommit(finalMessage, git);
         break;
       case 'edit':
         const { editedMessage } = await inquirer.prompt([
@@ -142,43 +170,13 @@ async function commitWithDiff(diff: string, git: GitService): Promise<void> {
             type: 'editor',
             name: 'editedMessage',
             message: 'Edit commit message:',
-            default: response.content,
+            default: finalMessage,
           },
         ]);
         await performCommit(editedMessage, git);
         break;
       case 'regenerate':
-        const regenSpinner = createAISpinner(chalk.cyan('🔄 Regenerating...'));
-        regenSpinner.start();
-        const newResponse = await animatedAIGeneration(
-          () => ai.generateCommitMessage(diff),
-          regenSpinner
-        );
-        regenSpinner.succeed(chalk.green('✨ New message generated!'));
-        
-        logger.newline();
-        const newLines = newResponse.content.split('\n');
-        const newMaxLen = Math.max(...newLines.map(l => l.length), 50);
-        const newBorder = '─'.repeat(newMaxLen + 2);
-        
-        console.log(chalk.cyan(`┌${newBorder}┐`));
-        for (const line of newLines) {
-          console.log(chalk.cyan('│ ') + chalk.white(line.padEnd(newMaxLen)) + chalk.cyan(' │'));
-        }
-        console.log(chalk.cyan(`└${newBorder}┘`));
-        logger.newline();
-        
-        const { confirm } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'confirm',
-            message: 'Use this message?',
-            default: true,
-          },
-        ]);
-        if (confirm) {
-          await performCommit(newResponse.content, git);
-        }
+        await commitWithDiff(diff, git);
         break;
       case 'cancel':
         logger.info('Commit cancelled');

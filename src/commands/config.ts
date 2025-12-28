@@ -2,6 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { config, getConfig } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
+import { validateTemplate } from '../utils/templates.js';
 import type { AIProvider } from '../types/index.js';
 
 export async function configCommand(): Promise<void> {
@@ -28,6 +29,7 @@ export async function configCommand(): Promise<void> {
         { name: 'Git Settings', value: 'git' },
         { name: 'GitHub Token', value: 'github' },
         { name: 'Security Settings', value: 'security' },
+        { name: 'Manage Templates', value: 'templates' },
         { name: 'Reset All', value: 'reset' },
         { name: 'Exit', value: 'exit' },
       ],
@@ -52,6 +54,9 @@ export async function configCommand(): Promise<void> {
       break;
     case 'security':
       await configureSecurity();
+      break;
+    case 'templates':
+      await manageTemplates();
       break;
     case 'reset':
       config.clear();
@@ -189,4 +194,195 @@ async function configureSecurity(): Promise<void> {
   config.set('security.scanOnCommit', scanOnCommit);
   config.set('security.severity.blockOnHigh', blockOnHigh);
   logger.success('Security settings updated');
+}
+
+async function manageTemplates(): Promise<void> {
+  const { templateType } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'templateType',
+      message: 'Manage templates for:',
+      choices: [
+        { name: 'Commit Messages', value: 'commit' },
+        { name: 'Pull Requests', value: 'pr' },
+        { name: 'Back to Main Menu', value: 'back' },
+      ],
+    },
+  ]);
+
+  if (templateType === 'back') return;
+
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: `Template actions for ${templateType}:`,
+      choices: [
+        { name: 'View/Set Active Template', value: 'view' },
+        { name: 'Create New Template', value: 'create' },
+        { name: 'Edit Template', value: 'edit' },
+        { name: 'Delete Template', value: 'delete' },
+        { name: 'View Variable Reference', value: 'reference' },
+        { name: 'Back', value: 'back' },
+      ],
+    },
+  ]);
+
+  switch (action) {
+    case 'view':
+      await viewTemplates(templateType);
+      break;
+    case 'create':
+      await createTemplate(templateType);
+      break;
+    case 'edit':
+      await editTemplate(templateType);
+      break;
+    case 'delete':
+      await deleteTemplate(templateType);
+      break;
+    case 'reference':
+      viewVariableReference();
+      await manageTemplates();
+      break;
+    case 'back':
+      await manageTemplates();
+      break;
+  }
+}
+
+async function viewTemplates(type: 'commit' | 'pr'): Promise<void> {
+  const cfg = getConfig();
+  const templates = cfg.templates[type];
+  const activeTemplate = type === 'commit' ? cfg.templates.activeCommitTemplate : cfg.templates.activePrTemplate;
+
+  logger.newline();
+  console.log(chalk.bold(`${type === 'commit' ? 'Commit' : 'PR'} Templates:\n`));
+  
+  for (const [name, content] of Object.entries(templates)) {
+    const isActive = name === activeTemplate;
+    console.log(`${isActive ? chalk.green('●') : ' '} ${chalk.cyan(name)}: ${chalk.dim(content.replace(/\n/g, '\\n'))}`);
+  }
+  logger.newline();
+
+  const { newActive } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'newActive',
+      message: 'Select active template:',
+      choices: [...Object.keys(templates), 'Back'],
+    },
+  ]);
+
+  if (newActive !== 'Back') {
+    const key = type === 'commit' ? 'templates.activeCommitTemplate' : 'templates.activePrTemplate';
+    config.set(key, newActive);
+    logger.success(`Active ${type} template set to: ${newActive}`);
+  }
+
+  await manageTemplates();
+}
+
+async function createTemplate(type: 'commit' | 'pr'): Promise<void> {
+  const { name, content } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'name',
+      message: 'Enter template name:',
+      validate: (input: string) => input.length > 0 || 'Name is required',
+    },
+    {
+      type: 'editor',
+      name: 'content',
+      message: 'Enter template content (use {variable} syntax):',
+      validate: (input: string) => validateTemplate(input) || 'Invalid template syntax. Check your braces.',
+    },
+  ]);
+
+  const cfg = getConfig();
+  const templates = { ...cfg.templates[type], [name]: content };
+  config.set(`templates.${type}`, templates);
+  logger.success(`Template '${name}' created`);
+  
+  await manageTemplates();
+}
+
+async function editTemplate(type: 'commit' | 'pr'): Promise<void> {
+  const cfg = getConfig();
+  const templates = cfg.templates[type];
+  const names = Object.keys(templates);
+
+  if (names.length === 0) {
+    logger.error('No templates available to edit');
+    return manageTemplates();
+  }
+
+  const { name } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'name',
+      message: 'Select template to edit:',
+      choices: names,
+    },
+  ]);
+
+  const { content } = await inquirer.prompt([
+    {
+      type: 'editor',
+      name: 'content',
+      message: `Editing template '${name}':`,
+      default: templates[name],
+      validate: (input: string) => validateTemplate(input) || 'Invalid template syntax. Check your braces.',
+    },
+  ]);
+
+  config.set(`templates.${type}.${name}`, content);
+  logger.success(`Template '${name}' updated`);
+  
+  await manageTemplates();
+}
+
+async function deleteTemplate(type: 'commit' | 'pr'): Promise<void> {
+  const cfg = getConfig();
+  const templates = { ...cfg.templates[type] };
+  const names = Object.keys(templates).filter(n => n !== 'default');
+
+  if (names.length === 0) {
+    logger.error('No custom templates available to delete');
+    return manageTemplates();
+  }
+
+  const { name } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'name',
+      message: 'Select template to delete:',
+      choices: names,
+    },
+  ]);
+
+  delete templates[name];
+  config.set(`templates.${type}`, templates);
+
+  // If we deleted the active template, reset to default
+  const activeKey = type === 'commit' ? 'templates.activeCommitTemplate' : 'templates.activePrTemplate';
+  if (cfg.templates[type === 'commit' ? 'activeCommitTemplate' : 'activePrTemplate'] === name) {
+    config.set(activeKey, 'default');
+  }
+
+  logger.success(`Template '${name}' deleted`);
+  await manageTemplates();
+}
+
+function viewVariableReference(): void {
+  logger.newline();
+  console.log(chalk.bold('Available Template Variables:'));
+  console.log(chalk.cyan('{type}'), chalk.dim('- Commit type (feat, fix, etc.)'));
+  console.log(chalk.cyan('{scope}'), chalk.dim('- Commit scope'));
+  console.log(chalk.cyan('{summary}'), chalk.dim('- Short summary of changes'));
+  console.log(chalk.cyan('{description}'), chalk.dim('- Detailed description'));
+  console.log(chalk.cyan('{branch}'), chalk.dim('- Current branch name'));
+  console.log(chalk.cyan('{ticketId}'), chalk.dim('- Ticket ID extracted from branch'));
+  console.log(chalk.cyan('{changes}'), chalk.dim('- Staged changes (diff)'));
+  logger.newline();
 }

@@ -63,6 +63,18 @@ const defaultConfig: Config = {
       blockOnLow: false,
     },
   },
+  templates: {
+    commit: {
+      default: '{type}{scope}: {summary}',
+      detailed: '{type}{scope}: {summary}\n\n{description}',
+    },
+    pr: {
+      default: '{summary}\n\n{description}',
+      detailed: '## Summary\n{summary}\n\n## Description\n{description}\n\n## Changes\n{changes}',
+    },
+    activeCommitTemplate: 'default',
+    activePrTemplate: 'default',
+  },
 };
 
 export const config = new Conf<Config>({
