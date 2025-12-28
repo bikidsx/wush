@@ -68,4 +68,32 @@ export class GitService {
       return null;
     }
   }
+
+  async hasUpstream(): Promise<boolean> {
+    try {
+      const branch = await this.getCurrentBranch();
+      const result = await this.git.raw(['config', `branch.${branch}.remote`]);
+      return !!result.trim();
+    } catch {
+      return false;
+    }
+  }
+
+  async push(options?: { force?: boolean; setUpstream?: boolean }): Promise<void> {
+    const args: string[] = [];
+    
+    if (options?.setUpstream) {
+      args.push('-u', 'origin', await this.getCurrentBranch());
+    }
+    
+    if (options?.force) {
+      args.push('--force');
+    }
+
+    await this.git.push(args);
+  }
+
+  async pull(): Promise<void> {
+    await this.git.pull();
+  }
 }

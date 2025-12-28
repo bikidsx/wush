@@ -14,6 +14,8 @@ export async function configCommand(): Promise<void> {
   console.log(chalk.dim('Conventional Commits:'), currentConfig.git.conventionalCommits ? chalk.green('enabled') : chalk.red('disabled'));
   console.log(chalk.dim('GitHub Connected:'), currentConfig.github.token ? chalk.green('yes') : chalk.red('no'));
   console.log(chalk.dim('Scan on Commit:'), currentConfig.security.scanOnCommit ? chalk.green('enabled') : chalk.red('disabled'));
+  console.log(chalk.dim('Commit Instructions:'), currentConfig.instructions?.commit ? chalk.green('custom') : chalk.dim('default'));
+  console.log(chalk.dim('PR Instructions:'), currentConfig.instructions?.pr ? chalk.green('custom') : chalk.dim('default'));
   logger.newline();
 
   const { action } = await inquirer.prompt([
@@ -27,6 +29,7 @@ export async function configCommand(): Promise<void> {
         { name: 'Change Model', value: 'model' },
         { name: 'Git Settings', value: 'git' },
         { name: 'GitHub Token', value: 'github' },
+        { name: 'Custom Instructions', value: 'instructions' },
         { name: 'Security Settings', value: 'security' },
         { name: 'Reset All', value: 'reset' },
         { name: 'Exit', value: 'exit' },
@@ -49,6 +52,9 @@ export async function configCommand(): Promise<void> {
       break;
     case 'github':
       await configureGitHub();
+      break;
+    case 'instructions':
+      await configureInstructions();
       break;
     case 'security':
       await configureSecurity();
@@ -189,4 +195,62 @@ async function configureSecurity(): Promise<void> {
   config.set('security.scanOnCommit', scanOnCommit);
   config.set('security.severity.blockOnHigh', blockOnHigh);
   logger.success('Security settings updated');
+}
+
+
+async function configureInstructions(): Promise<void> {
+  const cfg = getConfig();
+  
+  const { type } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'type',
+      message: 'Which instructions to configure?',
+      choices: [
+        { name: 'Commit message instructions', value: 'commit' },
+        { name: 'PR description instructions', value: 'pr' },
+        { name: 'Clear all custom instructions', value: 'clear' },
+      ],
+    },
+  ]);
+
+  if (type === 'clear') {
+    config.set('instructions.commit', '');
+    config.set('instructions.pr', '');
+    logger.success('Custom instructions cleared');
+    return;
+  }
+
+  const currentInstruction = cfg.instructions?.[type as 'commit' | 'pr'] || '';
+  
+  console.log(chalk.dim('\nExamples of custom instructions:'));
+  if (type === 'commit') {
+    console.log(chalk.dim('  - "Always include ticket number like JIRA-123"'));
+    console.log(chalk.dim('  - "Use emoji at the start of commit messages"'));
+    console.log(chalk.dim('  - "Keep messages under 50 characters"'));
+    console.log(chalk.dim('  - "Include the affected module in parentheses"'));
+  } else {
+    console.log(chalk.dim('  - "Always include a Testing section"'));
+    console.log(chalk.dim('  - "Link related Jira tickets"'));
+    console.log(chalk.dim('  - "Include screenshots for UI changes"'));
+    console.log(chalk.dim('  - "Add deployment notes section"'));
+  }
+  logger.newline();
+
+  const { instruction } = await inquirer.prompt([
+    {
+      type: 'editor',
+      name: 'instruction',
+      message: `Enter custom ${type} instructions (leave empty for default):`,
+      default: currentInstruction,
+    },
+  ]);
+
+  config.set(`instructions.${type}`, instruction.trim());
+  
+  if (instruction.trim()) {
+    logger.success(`Custom ${type} instructions saved`);
+  } else {
+    logger.info(`Using default ${type} instructions`);
+  }
 }

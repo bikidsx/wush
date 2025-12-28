@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { BaseAIProvider } from './base.js';
+import { BaseAIProvider, type GenerateOptions } from './base.js';
 import { getSystemPrompt, buildCommitPrompt, buildPRPrompt, buildSecurityPrompt } from './prompts.js';
 import type { AIResponse } from '../../types/index.js';
 
@@ -11,13 +11,16 @@ export class GoogleProvider extends BaseAIProvider {
     this.client = new GoogleGenerativeAI(apiKey);
   }
 
-  async generateCommitMessage(diff: string): Promise<AIResponse> {
+  async generateCommitMessage(diff: string, options?: GenerateOptions): Promise<AIResponse> {
     const model = this.client.getGenerativeModel({ 
       model: this.model,
       systemInstruction: getSystemPrompt('commit'),
     });
     
-    const result = await model.generateContent(buildCommitPrompt(diff, { conventional: true }));
+    const result = await model.generateContent(buildCommitPrompt(diff, { 
+      conventional: options?.conventional ?? true,
+      customInstructions: options?.customInstructions 
+    }));
     const response = result.response;
 
     return {
@@ -31,13 +34,15 @@ export class GoogleProvider extends BaseAIProvider {
     };
   }
 
-  async generatePRDescription(commits: string[], diff: string): Promise<AIResponse> {
+  async generatePRDescription(commits: string[], diff: string, options?: GenerateOptions): Promise<AIResponse> {
     const model = this.client.getGenerativeModel({ 
       model: this.model,
       systemInstruction: getSystemPrompt('pr'),
     });
     
-    const result = await model.generateContent(buildPRPrompt(commits, diff));
+    const result = await model.generateContent(buildPRPrompt(commits, diff, {
+      customInstructions: options?.customInstructions
+    }));
     const response = result.response;
 
     return {

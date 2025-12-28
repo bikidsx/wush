@@ -45,6 +45,10 @@ const defaultConfig: Config = {
     conventionalCommits: true,
     autoStage: false,
   },
+  instructions: {
+    commit: '',
+    pr: '',
+  },
   github: {
     token: '',
     defaultBranch: 'main',

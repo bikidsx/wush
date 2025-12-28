@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { BaseAIProvider } from './base.js';
+import { BaseAIProvider, type GenerateOptions } from './base.js';
 import { getSystemPrompt, buildCommitPrompt, buildPRPrompt, buildSecurityPrompt } from './prompts.js';
 import type { AIResponse } from '../../types/index.js';
 
@@ -11,13 +11,16 @@ export class AnthropicProvider extends BaseAIProvider {
     this.client = new Anthropic({ apiKey });
   }
 
-  async generateCommitMessage(diff: string): Promise<AIResponse> {
+  async generateCommitMessage(diff: string, options?: GenerateOptions): Promise<AIResponse> {
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: 300,
       system: getSystemPrompt('commit'),
       messages: [
-        { role: 'user', content: buildCommitPrompt(diff, { conventional: true }) },
+        { role: 'user', content: buildCommitPrompt(diff, { 
+          conventional: options?.conventional ?? true,
+          customInstructions: options?.customInstructions 
+        }) },
       ],
     });
 
@@ -33,13 +36,15 @@ export class AnthropicProvider extends BaseAIProvider {
     };
   }
 
-  async generatePRDescription(commits: string[], diff: string): Promise<AIResponse> {
+  async generatePRDescription(commits: string[], diff: string, options?: GenerateOptions): Promise<AIResponse> {
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: 1000,
       system: getSystemPrompt('pr'),
       messages: [
-        { role: 'user', content: buildPRPrompt(commits, diff) },
+        { role: 'user', content: buildPRPrompt(commits, diff, {
+          customInstructions: options?.customInstructions
+        }) },
       ],
     });
 

@@ -193,12 +193,16 @@ export function getSystemPrompt(task: 'commit' | 'pr' | 'security' | 'review'): 
 /**
  * Build a user prompt for commit message generation
  */
-export function buildCommitPrompt(diff: string, options?: { conventional?: boolean }): string {
+export function buildCommitPrompt(diff: string, options?: { conventional?: boolean; customInstructions?: string }): string {
   const conventionalNote = options?.conventional 
     ? '\nIMPORTANT: Use Conventional Commits format strictly.' 
     : '';
   
-  return `Analyze the following git diff and generate an appropriate commit message.${conventionalNote}
+  const customNote = options?.customInstructions 
+    ? `\n\n## Custom Instructions from User:\n${options.customInstructions}` 
+    : '';
+  
+  return `Analyze the following git diff and generate an appropriate commit message.${conventionalNote}${customNote}
 
 \`\`\`diff
 ${diff}
@@ -208,12 +212,16 @@ ${diff}
 /**
  * Build a user prompt for PR description generation
  */
-export function buildPRPrompt(commits: string[], diff: string, options?: { template?: string }): string {
+export function buildPRPrompt(commits: string[], diff: string, options?: { template?: string; customInstructions?: string }): string {
   const templateNote = options?.template 
     ? `\nFollow this PR template structure:\n${options.template}` 
     : '';
 
-  return `Generate a pull request description for the following changes.${templateNote}
+  const customNote = options?.customInstructions 
+    ? `\n\n## Custom Instructions from User:\n${options.customInstructions}` 
+    : '';
+
+  return `Generate a pull request description for the following changes.${templateNote}${customNote}
 
 ## Commits included:
 ${commits.map(c => `- ${c}`).join('\n')}

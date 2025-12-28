@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk';
-import { BaseAIProvider } from './base.js';
+import { BaseAIProvider, type GenerateOptions } from './base.js';
 import { getSystemPrompt, buildCommitPrompt, buildPRPrompt, buildSecurityPrompt } from './prompts.js';
 import type { AIResponse } from '../../types/index.js';
 
@@ -11,12 +11,15 @@ export class GroqProvider extends BaseAIProvider {
     this.client = new Groq({ apiKey });
   }
 
-  async generateCommitMessage(diff: string): Promise<AIResponse> {
+  async generateCommitMessage(diff: string, options?: GenerateOptions): Promise<AIResponse> {
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: [
         { role: 'system', content: getSystemPrompt('commit') },
-        { role: 'user', content: buildCommitPrompt(diff, { conventional: true }) },
+        { role: 'user', content: buildCommitPrompt(diff, { 
+          conventional: options?.conventional ?? true,
+          customInstructions: options?.customInstructions 
+        }) },
       ],
       temperature: 0.4,
       max_tokens: 300,
@@ -33,12 +36,14 @@ export class GroqProvider extends BaseAIProvider {
     };
   }
 
-  async generatePRDescription(commits: string[], diff: string): Promise<AIResponse> {
+  async generatePRDescription(commits: string[], diff: string, options?: GenerateOptions): Promise<AIResponse> {
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: [
         { role: 'system', content: getSystemPrompt('pr') },
-        { role: 'user', content: buildPRPrompt(commits, diff) },
+        { role: 'user', content: buildPRPrompt(commits, diff, {
+          customInstructions: options?.customInstructions
+        }) },
       ],
       temperature: 0.5,
       max_tokens: 1000,
