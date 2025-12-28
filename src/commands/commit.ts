@@ -91,13 +91,19 @@ export async function commitCommand(): Promise<void> {
 }
 
 async function commitWithDiff(diff: string, git: GitService): Promise<void> {
+  const config = getConfig();
+  const customInstructions = config.instructions?.commit || '';
+  
   const spinner = createAISpinner(chalk.cyan(THINKING_MESSAGES[0]));
   spinner.start();
   
   try {
     const ai = createAIProvider();
     const response = await animatedAIGeneration(
-      () => ai.generateCommitMessage(diff),
+      () => ai.generateCommitMessage(diff, { 
+        customInstructions,
+        conventional: config.git.conventionalCommits 
+      }),
       spinner
     );
     
@@ -151,7 +157,10 @@ async function commitWithDiff(diff: string, git: GitService): Promise<void> {
         const regenSpinner = createAISpinner(chalk.cyan('🔄 Regenerating...'));
         regenSpinner.start();
         const newResponse = await animatedAIGeneration(
-          () => ai.generateCommitMessage(diff),
+          () => ai.generateCommitMessage(diff, { 
+            customInstructions,
+            conventional: config.git.conventionalCommits 
+          }),
           regenSpinner
         );
         regenSpinner.succeed(chalk.green('✨ New message generated!'));

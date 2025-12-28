@@ -5,6 +5,7 @@ import { isSetupComplete } from './utils/config.js';
 import { runSetup } from './utils/setup.js';
 import { commitCommand } from './commands/commit.js';
 import { prCommand } from './commands/pr.js';
+import { pushCommand } from './commands/push.js';
 import { scanCommand } from './commands/scan.js';
 import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
@@ -83,6 +84,17 @@ program
   .action(async (options) => {
     await ensureSetup();
     await branchCommand(options);
+  });
+
+// Push command
+program
+  .command('push')
+  .alias('p')
+  .description('Push changes to remote')
+  .option('-f, --force', 'Force push (use with caution)')
+  .option('-u, --upstream', 'Set upstream branch')
+  .action(async (options) => {
+    await pushCommand(options);
   });
 
 // Config command

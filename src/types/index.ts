@@ -21,6 +21,10 @@ export interface Config {
     conventionalCommits: boolean;
     autoStage: boolean;
   };
+  instructions: {
+    commit: string;
+    pr: string;
+  };
   github: {
     token: string;
     defaultBranch: string;

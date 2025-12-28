@@ -1,5 +1,10 @@
 import type { AIResponse } from '../../types/index.js';
 
+export interface GenerateOptions {
+  customInstructions?: string;
+  conventional?: boolean;
+}
+
 export abstract class BaseAIProvider {
   protected apiKey: string;
   protected model: string;
@@ -9,8 +14,8 @@ export abstract class BaseAIProvider {
     this.model = model;
   }
 
-  abstract generateCommitMessage(diff: string): Promise<AIResponse>;
-  abstract generatePRDescription(commits: string[], diff: string): Promise<AIResponse>;
+  abstract generateCommitMessage(diff: string, options?: GenerateOptions): Promise<AIResponse>;
+  abstract generatePRDescription(commits: string[], diff: string, options?: GenerateOptions): Promise<AIResponse>;
   abstract analyzeSecurityIssues(code: string, filename: string): Promise<AIResponse>;
   abstract generateBranchName(description: string, type: string): Promise<AIResponse>;
 }

@@ -88,9 +88,12 @@ export async function prCommand(options: PROptions): Promise<void> {
 
     spinner.text = 'Generating PR description...';
     
+    const customInstructions = config.instructions?.pr || '';
     const diff = await git.getStagedDiff();
     const ai = createAIProvider();
-    const response = await ai.generatePRDescription(commits, diff || '');
+    const response = await ai.generatePRDescription(commits, diff || '', {
+      customInstructions
+    });
     
     spinner.stop();
 
