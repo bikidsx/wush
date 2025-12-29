@@ -89,7 +89,8 @@ export async function prCommand(options: PROptions): Promise<void> {
     spinner.text = 'Generating PR description...';
     
     const customInstructions = config.instructions?.pr || '';
-    const diff = await git.getStagedDiff();
+    // Get diff between current branch and target branch (not staged diff)
+    const diff = await git.getDiffBetweenBranches(targetBranch!);
     const ai = createAIProvider();
     const response = await ai.generatePRDescription(commits, diff || '', {
       customInstructions
