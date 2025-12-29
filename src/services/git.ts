@@ -35,8 +35,36 @@ export class GitService {
   }
 
   async getCommitsSince(branch: string): Promise<string[]> {
-    const log = await this.git.log({ from: branch, to: 'HEAD' });
-    return log.all.map((commit) => `${commit.hash.slice(0, 7)} ${commit.message}`);
+    try {
+      // Get commits that are in HEAD but not in target branch
+      // This ensures we only get commits unique to current branch
+      const log = await this.git.log([`${branch}..HEAD`]);
+      return log.all.map((commit) => `${commit.hash.slice(0, 7)} ${commit.message}`);
+    } catch {
+      // Fallback: try with origin/ prefix for remote branches
+      try {
+        const log = await this.git.log([`origin/${branch}..HEAD`]);
+        return log.all.map((commit) => `${commit.hash.slice(0, 7)} ${commit.message}`);
+      } catch {
+        return [];
+      }
+    }
+  }
+
+  async getDiffBetweenBranches(targetBranch: string): Promise<string> {
+    try {
+      // Get diff between target branch and current HEAD
+      const diff = await this.git.diff([`${targetBranch}...HEAD`]);
+      return diff;
+    } catch {
+      // Fallback: try with origin/ prefix
+      try {
+        const diff = await this.git.diff([`origin/${targetBranch}...HEAD`]);
+        return diff;
+      } catch {
+        return '';
+      }
+    }
   }
 
   async stageAll(): Promise<void> {
