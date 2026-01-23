@@ -40,6 +40,13 @@ const defaultConfig: Config = {
       defaultModel: 'gpt-oss-120b',
       models: ['gpt-oss-120b', 'gpt-oss-20b', 'llama-4'],
     },
+    azure: {
+      apiKey: '',
+      endpoint: '',
+      apiVersion: '2024-10-21',
+      defaultModel: 'gpt-4o',
+      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+    },
   },
   git: {
     conventionalCommits: true,
