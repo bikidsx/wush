@@ -6,6 +6,7 @@ import { runSetup } from './utils/setup.js';
 import { commitCommand } from './commands/commit.js';
 import { prCommand } from './commands/pr.js';
 import { pushCommand } from './commands/push.js';
+import { pullCommand } from './commands/pull.js';
 import { scanCommand } from './commands/scan.js';
 import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
@@ -95,6 +96,17 @@ program
   .option('-u, --upstream', 'Set upstream branch')
   .action(async (options) => {
     await pushCommand(options);
+  });
+
+// Pull command
+program
+  .command('pull')
+  .alias('l')
+  .description('Pull changes from remote')
+  .option('-r, --rebase', 'Rebase instead of merge')
+  .option('-f, --force', 'Force pull (overwrite local changes)')
+  .action(async (options) => {
+    await pullCommand(options);
   });
 
 // Config command

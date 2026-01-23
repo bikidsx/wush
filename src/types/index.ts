@@ -1,4 +1,4 @@
-export type AIProvider = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq';
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'azure';
 
 export interface Config {
   version: string;
@@ -16,6 +16,7 @@ export interface Config {
     google: GoogleProviderConfig;
     ollama: OllamaProviderConfig;
     groq: ProviderConfig;
+    azure: AzureProviderConfig;
   };
   git: {
     conventionalCommits: boolean;
@@ -59,6 +60,11 @@ export interface GoogleProviderConfig extends ProviderConfig {
 
 export interface OllamaProviderConfig extends Omit<ProviderConfig, 'apiKey'> {
   baseUrl: string;
+}
+
+export interface AzureProviderConfig extends ProviderConfig {
+  endpoint: string;
+  apiVersion: string;
 }
 
 export interface AIResponse {

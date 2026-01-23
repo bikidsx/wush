@@ -121,7 +121,21 @@ export class GitService {
     await this.git.push(args);
   }
 
-  async pull(): Promise<void> {
-    await this.git.pull();
+  async pull(options?: { rebase?: boolean; force?: boolean }): Promise<void> {
+    const args: string[] = [];
+
+    if (options?.rebase) {
+      args.push('--rebase');
+    }
+
+    if (options?.force) {
+      args.push('--force');
+    }
+
+    if (args.length > 0) {
+      await this.git.pull(args);
+    } else {
+      await this.git.pull();
+    }
   }
 }
