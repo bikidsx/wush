@@ -39,6 +39,14 @@ wush branch    # or wush b
 ```
 Create branches with AI-generated names based on your task description.
 
+### Push & Pull
+```bash
+wush push      # or wush p
+wush pull      # or wush l
+wush pull -r   # Pull with rebase
+```
+Push and pull changes with smart defaults and safety prompts.
+
 ### Security Scan
 ```bash
 wush scan    # or wush s
@@ -66,6 +74,7 @@ Configure AI provider, model, GitHub token, and preferences.
 | **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash |
 | **Ollama** | Llama 3.3 70B, Qwen3 72B (Local - Free) |
 | **Groq** | gpt-oss-120B, Llama 4 (Fast inference) |
+| **Azure OpenAI** | GPT-4o, GPT-4o mini, GPT-4 Turbo (Enterprise) |
 
 ## First Run Setup
 
@@ -83,7 +92,7 @@ On first run, Wush will guide you through:
 - 🌿 **Branch Creation** - AI-suggested branch names based on task description
 - 🔒 **Security Scanning** - Detect vulnerabilities before they ship
 - 🎨 **Beautiful UI** - Sleek terminal interface with colors and animations
-- ⚡ **Multiple AI Providers** - Choose your preferred AI (OpenAI, Claude, Gemini, Ollama, Groq)
+- ⚡ **Multiple AI Providers** - Choose your preferred AI (OpenAI, Azure OpenAI, Claude, Gemini, Ollama, Groq)
 - 🔧 **Conventional Commits** - Follow best practices automatically
 
 ## Security Scanning
