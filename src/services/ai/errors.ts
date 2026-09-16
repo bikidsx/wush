@@ -6,7 +6,12 @@
  * — technically true, but it never told the user to run `wush config`.
  */
 
-import { APICallError, InvalidToolInputError, NoObjectGeneratedError } from 'ai';
+import {
+  APICallError,
+  InvalidToolInputError,
+  NoObjectGeneratedError,
+  NoOutputGeneratedError,
+} from 'ai';
 import { ProviderConfigError } from './model.js';
 
 export interface FriendlyError {
@@ -21,6 +26,15 @@ export function toFriendlyError(error: unknown, context?: { providerLabel?: stri
 
   if (error instanceof ProviderConfigError) {
     return { message: error.message, hint: error.hint, retryable: false };
+  }
+
+  if (NoOutputGeneratedError.isInstance(error)) {
+    // Reached only when no more specific stream error was captured.
+    return {
+      message: `${who} produced no usable output.`,
+      hint: 'Try regenerating, or switch to a different model.',
+      retryable: true,
+    };
   }
 
   if (NoObjectGeneratedError.isInstance(error)) {
@@ -40,6 +54,18 @@ export function toFriendlyError(error: unknown, context?: { providerLabel?: stri
 
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
+
+    // A rejected schema is a wush bug, not a user misconfiguration, so say so
+    // rather than sending the user to `wush config`.
+    if (status === 400 && /invalid[_ ]json[_ ]schema|response_format|text\.format/i.test(
+      `${error.message} ${error.responseBody ?? ''}`
+    )) {
+      return {
+        message: `${who} rejected the output schema wush sent.`,
+        hint: 'This is a bug in wush, not your configuration. Please report it with the model id.',
+        retryable: false,
+      };
+    }
 
     if (status === 401 || status === 403) {
       return {

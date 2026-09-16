@@ -9,6 +9,7 @@ import { toFriendlyError } from '../services/ai/errors.js';
 interface ModelsOptions {
   provider?: string;
   refresh?: boolean;
+  all?: boolean;
 }
 
 /** Lists what the configured (or requested) provider currently offers. */
@@ -32,7 +33,10 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
   const spinner = ora(chalk.cyan(`Fetching models from ${definition.label}...`)).start();
 
   try {
-    const { models, source } = await listModels(providerId, { refresh: options.refresh });
+    const { models, source, hiddenCount } = await listModels(providerId, {
+      refresh: options.refresh,
+      includeAll: options.all,
+    });
     spinner.stop();
 
     logger.newline();
@@ -43,6 +47,11 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
         source === 'cache'
           ? '  Cached list — pass --refresh to update.'
           : '  Could not reach the provider; showing known ids.'
+      );
+    }
+    if (hiddenCount > 0) {
+      logger.dim(
+        `  ${hiddenCount} deprecated or non-text model${hiddenCount === 1 ? '' : 's'} hidden — pass --all to show.`
       );
     }
     logger.newline();
@@ -58,8 +67,18 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
     for (const model of models) {
       const active = model.id === cfg.ai.model && providerId === cfg.ai.providerId;
       const marker = active ? chalk.green('→') : ' ';
-      const label = model.label && model.label !== model.id ? chalk.dim(` ${model.label}`) : '';
-      console.log(`  ${marker} ${active ? chalk.green.bold(model.id) : model.id}${label}`);
+
+      const tags: string[] = [];
+      if (model.deprecated) {
+        tags.push(chalk.yellow(model.deprecationNote ? `deprecated: ${model.deprecationNote}` : 'deprecated'));
+      }
+      if (model.kind && model.kind !== 'language' && model.kind !== 'unknown') {
+        tags.push(chalk.magenta(model.kind));
+      }
+      if (model.label && model.label !== model.id) tags.push(chalk.dim(model.label));
+
+      const suffix = tags.length > 0 ? `  ${tags.join(chalk.dim(' · '))}` : '';
+      console.log(`  ${marker} ${active ? chalk.green.bold(model.id) : model.id}${suffix}`);
     }
     logger.newline();
   } catch (error) {

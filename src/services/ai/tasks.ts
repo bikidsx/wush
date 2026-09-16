@@ -90,18 +90,33 @@ async function runStructured<T>(
   };
 
   if (options.onPartial) {
-    const result = streamText(shared);
+    // streamText surfaces failures inside the stream rather than throwing, so
+    // awaiting the output yields a generic NoOutputGeneratedError. Capturing the
+    // real cause here keeps the actionable provider error (bad schema, 401,
+    // rate limit) instead of "No output generated."
+    let streamError: unknown;
 
-    for await (const partial of result.partialOutputStream) {
-      options.onPartial(partial);
+    const result = streamText({
+      ...shared,
+      onError({ error }) {
+        streamError ??= error;
+      },
+    });
+
+    try {
+      for await (const partial of result.partialOutputStream) {
+        options.onPartial(partial);
+      }
+
+      return {
+        value: (await result.output) as T,
+        model: resolved.modelId,
+        providerId: resolved.providerId,
+        usage: normaliseUsage(await result.usage),
+      };
+    } catch (error) {
+      throw streamError ?? error;
     }
-
-    return {
-      value: (await result.output) as T,
-      model: resolved.modelId,
-      providerId: resolved.providerId,
-      usage: normaliseUsage(await result.usage),
-    };
   }
 
   const result = await generateText(shared);

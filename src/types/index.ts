@@ -20,10 +20,32 @@ export interface CustomProvider {
   supportsStructuredOutputs?: boolean;
 }
 
+/** What a model can be used for, as reported by the provider. */
+export type ModelKind =
+  | 'language'
+  | 'embedding'
+  | 'image'
+  | 'speech'
+  | 'transcription'
+  | 'video'
+  | 'reranking'
+  | 'moderation'
+  | 'unknown';
+
 export interface ModelInfo {
   id: string;
   label?: string;
   description?: string;
+  /** Epoch milliseconds, when the provider reports a creation date. */
+  createdAt?: number;
+  /** Omitted when the provider gives no capability signal. */
+  kind?: ModelKind;
+  /** True when the provider signals the model is deprecated or inactive. */
+  deprecated?: boolean;
+  /** Why it was flagged, shown to the user rather than hidden silently. */
+  deprecationNote?: string;
+  /** A pinned dated snapshot such as gpt-4o-2024-11-20. */
+  snapshot?: boolean;
 }
 
 /** Cached model discovery result per provider id. */

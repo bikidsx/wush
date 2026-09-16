@@ -130,64 +130,108 @@ export async function selectModel(providerId: string): Promise<string> {
   const definition = availableProviders().find((p) => p.id === providerId);
   const spinner = ora(chalk.cyan('Fetching available models...')).start();
 
-  const { models, source } = await listModels(providerId);
+  let includeAll = false;
+  let { models, source, hiddenCount } = await listModels(providerId);
   spinner.stop();
 
-  if (source === 'fallback' && models.length === 0) {
+  for (;;) {
+    if (source === 'fallback' && models.length === 0) {
+      const { model } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'model',
+          message:
+            definition?.id === 'azure'
+              ? 'Azure deployment name:'
+              : 'Model id (could not list models automatically):',
+          validate: (input: string) => input.trim().length > 0 || 'A model id is required',
+        },
+      ]);
+      return model.trim();
+    }
+
+    if (source === 'cache') logger.dim('  Using cached model list.');
+    if (source === 'fallback') logger.dim('  Could not reach the provider; showing known ids.');
+    if (hiddenCount > 0 && !includeAll) {
+      logger.dim(`  ${hiddenCount} deprecated or non-text model(s) hidden.`);
+    }
+
     const { model } = await inquirer.prompt([
       {
-        type: 'input',
+        type: 'list',
         name: 'model',
-        message:
-          definition?.id === 'azure'
-            ? 'Azure deployment name:'
-            : 'Model id (could not list models automatically):',
-        validate: (input: string) => input.trim().length > 0 || 'A model id is required',
+        message: 'Select model:',
+        pageSize: 15,
+        loop: false,
+        choices: [
+          ...models.map((m) => ({
+            name: formatModelChoice(m),
+            value: m.id,
+          })),
+          new inquirer.Separator(),
+          { name: chalk.cyan('Enter a model id manually...'), value: '__manual__' },
+          ...(hiddenCount > 0 && !includeAll
+            ? [{ name: chalk.cyan(`Show all (${hiddenCount} hidden)`), value: '__all__' }]
+            : []),
+          { name: chalk.cyan('Refresh list'), value: '__refresh__' },
+        ],
       },
     ]);
-    return model.trim();
+
+    if (model === '__manual__') {
+      const { manual } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'manual',
+          message: 'Model id:',
+          validate: (input: string) => input.trim().length > 0 || 'A model id is required',
+        },
+      ]);
+      return manual.trim();
+    }
+
+    if (model === '__all__') {
+      includeAll = true;
+      // Served from cache, so revealing hidden entries costs no request.
+      ({ models, source, hiddenCount } = await listModels(providerId, { includeAll: true }));
+      continue;
+    }
+
+    if (model === '__refresh__') {
+      const refreshing = ora(chalk.cyan('Refreshing...')).start();
+      ({ models, source, hiddenCount } = await listModels(providerId, {
+        refresh: true,
+        includeAll,
+      }));
+      refreshing.stop();
+      continue;
+    }
+
+    return model;
+  }
+}
+
+/** Renders a model row with its capability and deprecation state. */
+function formatModelChoice(model: {
+  id: string;
+  label?: string;
+  kind?: string;
+  deprecated?: boolean;
+  deprecationNote?: string;
+}): string {
+  const parts: string[] = [];
+
+  if (model.deprecated) {
+    parts.push(chalk.yellow(model.deprecationNote ? `deprecated: ${model.deprecationNote}` : 'deprecated'));
+  }
+  if (model.kind && model.kind !== 'language' && model.kind !== 'unknown') {
+    parts.push(chalk.magenta(model.kind));
+  }
+  if (model.label && model.label !== model.id) {
+    parts.push(chalk.dim(model.label));
   }
 
-  if (source === 'cache') logger.dim('  Using cached model list.');
-  if (source === 'fallback') logger.dim('  Could not reach the provider; showing known ids.');
-
-  const { model } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'model',
-      message: 'Select model:',
-      pageSize: 15,
-      loop: false,
-      choices: [
-        ...models.map((m) => ({
-          name: m.label && m.label !== m.id ? `${m.id} ${chalk.dim('— ' + m.label)}` : m.id,
-          value: m.id,
-        })),
-        new inquirer.Separator(),
-        { name: chalk.cyan('Enter a model id manually...'), value: '__manual__' },
-        { name: chalk.cyan('Refresh list'), value: '__refresh__' },
-      ],
-    },
-  ]);
-
-  if (model === '__manual__') {
-    const { manual } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'manual',
-        message: 'Model id:',
-        validate: (input: string) => input.trim().length > 0 || 'A model id is required',
-      },
-    ]);
-    return manual.trim();
-  }
-
-  if (model === '__refresh__') {
-    await listModels(providerId, { refresh: true });
-    return selectModel(providerId);
-  }
-
-  return model;
+  return parts.length > 0 ? `${model.id} ${chalk.dim('—')} ${parts.join(chalk.dim(' · '))}` : model.id;
 }
 
 /** Registers a user-defined OpenAI-compatible endpoint. */

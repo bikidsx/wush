@@ -116,6 +116,7 @@ program
   .description('List models available from your AI provider')
   .option('-p, --provider <id>', 'Inspect a specific provider')
   .option('-r, --refresh', 'Bypass the cache and refetch')
+  .option('-a, --all', 'Include deprecated and non-text models')
   .action(async (options) => {
     await modelsCommand(options);
   });
