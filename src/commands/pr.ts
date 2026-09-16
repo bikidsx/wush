@@ -3,7 +3,9 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { Octokit } from '@octokit/rest';
 import { GitService } from '../services/git.js';
-import { createAIProvider } from '../services/ai/factory.js';
+import { generatePRDescription } from '../services/ai/tasks.js';
+import { formatPRBody } from '../services/ai/schemas.js';
+import { toFriendlyError } from '../services/ai/errors.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/config.js';
 
@@ -87,21 +89,16 @@ export async function prCommand(options: PROptions): Promise<void> {
     }
 
     spinner.text = 'Generating PR description...';
-    
-    const customInstructions = config.instructions?.pr || '';
-    // Get diff between current branch and target branch (not staged diff)
+
+    // Diff against the target branch, not the staged diff.
     const diff = await git.getDiffBetweenBranches(targetBranch!);
-    const ai = createAIProvider();
-    const response = await ai.generatePRDescription(commits, diff || '', {
-      customInstructions
-    });
-    
+    const result = await generatePRDescription(commits, diff || '');
+
     spinner.stop();
 
-    // Parse title and body from response
-    const lines = response.content.split('\n');
-    const title = lines[0].replace(/^#\s*/, '').replace(/^\*\*/, '').replace(/\*\*$/, '');
-    const body = lines.slice(1).join('\n').trim();
+    // Title and body come back as separate fields, so no markdown stripping.
+    const title = result.value.title;
+    const body = formatPRBody(result.value);
 
     logger.newline();
     logger.info(`Found ${commits.length} commits`);
@@ -156,7 +153,9 @@ export async function prCommand(options: PROptions): Promise<void> {
     }
   } catch (error: any) {
     spinner.stop();
-    logger.error(`Failed: ${error.message}`);
+    const friendly = toFriendlyError(error);
+    logger.error(friendly.message);
+    if (friendly.hint) logger.dim(`  ${friendly.hint}`);
     process.exit(1);
   }
 }

@@ -11,6 +11,7 @@ import { scanCommand } from './commands/scan.js';
 import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
 import { branchCommand } from './commands/branch.js';
+import { modelsCommand, providersCommand } from './commands/models.js';
 
 const program = new Command();
 
@@ -107,6 +108,24 @@ program
   .option('-f, --force', 'Force pull (overwrite local changes)')
   .action(async (options) => {
     await pullCommand(options);
+  });
+
+// Models command
+program
+  .command('models')
+  .description('List models available from your AI provider')
+  .option('-p, --provider <id>', 'Inspect a specific provider')
+  .option('-r, --refresh', 'Bypass the cache and refetch')
+  .action(async (options) => {
+    await modelsCommand(options);
+  });
+
+// Providers command
+program
+  .command('providers')
+  .description('List configured AI providers and their readiness')
+  .action(() => {
+    providersCommand();
   });
 
 // Config command

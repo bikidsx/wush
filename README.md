@@ -67,14 +67,33 @@ Configure AI provider, model, GitHub token, and preferences.
 
 ## Supported AI Providers
 
-| Provider | Models |
-|----------|--------|
-| **OpenAI** | GPT-5, GPT-5 mini, GPT-5 nano |
-| **Anthropic** | Claude Sonnet 4.5, Claude Haiku 4.5 |
-| **Google** | Gemini 2.5 Pro, Gemini 2.5 Flash |
-| **Ollama** | Llama 3.3 70B, Qwen3 72B (Local - Free) |
-| **Groq** | gpt-oss-120B, Llama 4 (Fast inference) |
-| **Azure OpenAI** | GPT-4o, GPT-4o mini, GPT-4 Turbo (Enterprise) |
+Wush does not ship a fixed model list. Models are discovered from your provider
+at runtime, so a model works the day it ships.
+
+| Provider | Auth | Model discovery |
+|----------|------|-----------------|
+| **OpenAI** | `OPENAI_API_KEY` | live |
+| **Anthropic** | `ANTHROPIC_API_KEY` | live |
+| **Google** | `GOOGLE_GENERATIVE_AI_API_KEY` | live |
+| **Groq** | `GROQ_API_KEY` | live |
+| **Azure OpenAI** | `AZURE_API_KEY` | deployment name (Azure exposes no list) |
+| **Ollama** | none — local | live |
+| **Vercel AI Gateway** | `AI_GATEWAY_API_KEY` | live, every major model via one key |
+| **Any OpenAI-compatible endpoint** | optional | live |
+
+The last row is the important one: LM Studio, OpenRouter, vLLM, LiteLLM,
+DeepSeek, xAI, Together, and any self-hosted OpenAI-format server work by
+adding an endpoint, with no new dependency and no wush release.
+
+```bash
+wush providers            # what's configured and ready
+wush models               # what your provider currently offers
+wush models -p ollama -r  # inspect another provider, bypassing the cache
+wush config               # switch provider/model, or add a custom endpoint
+```
+
+API keys are read from the environment first and only stored in config if you
+choose to enter them interactively.
 
 ## First Run Setup
 
@@ -91,9 +110,10 @@ On first run, Wush will guide you through:
 - 🔀 **Smart PRs** - Auto-generate PR titles and descriptions
 - 🌿 **Branch Creation** - AI-suggested branch names based on task description
 - 🔒 **Security Scanning** - Detect vulnerabilities before they ship
-- 🎨 **Beautiful UI** - Sleek terminal interface with colors and animations
-- ⚡ **Multiple AI Providers** - Choose your preferred AI (OpenAI, Azure OpenAI, Claude, Gemini, Ollama, Groq)
-- 🔧 **Conventional Commits** - Follow best practices automatically
+- 🎨 **Live TUI** - Watch the message being written, cancel mid-flight with `esc`
+- ⚡ **Any Provider, Any Model** - Built on the Vercel AI SDK; models are
+  discovered at runtime, and any OpenAI-compatible endpoint can be added
+- 🔧 **Conventional Commits** - Enforced by a schema, not by string parsing
 
 ## Security Scanning
 
