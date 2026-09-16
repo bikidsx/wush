@@ -11,13 +11,15 @@ import { scanCommand } from './commands/scan.js';
 import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
 import { branchCommand } from './commands/branch.js';
+import { modelsCommand, providersCommand } from './commands/models.js';
+import { VERSION } from './version.js';
 
 const program = new Command();
 
 program
   .name('wush')
   .description('AI-powered Git workflow CLI')
-  .version('1.0.0');
+  .version(VERSION);
 
 // Middleware to check setup
 async function ensureSetup(): Promise<void> {
@@ -107,6 +109,25 @@ program
   .option('-f, --force', 'Force pull (overwrite local changes)')
   .action(async (options) => {
     await pullCommand(options);
+  });
+
+// Models command
+program
+  .command('models')
+  .description('List models available from your AI provider')
+  .option('-p, --provider <id>', 'Inspect a specific provider')
+  .option('-r, --refresh', 'Bypass the cache and refetch')
+  .option('-a, --all', 'Include deprecated and non-text models')
+  .action(async (options) => {
+    await modelsCommand(options);
+  });
+
+// Providers command
+program
+  .command('providers')
+  .description('List configured AI providers and their readiness')
+  .action(async () => {
+    await providersCommand();
   });
 
 // Config command

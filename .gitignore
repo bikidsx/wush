@@ -10,11 +10,10 @@ lerna-debug.log*
 # Security reports
 security-report-*.json
 
-# Source (only dist goes to npm)
-src/
-bin/
-tsconfig.json
-bun.lock
+# NOTE: src/, bin/, tsconfig.json and bun.lock are intentionally NOT ignored here.
+# They are excluded from the published npm tarball via .npmignore instead.
+# Ignoring them here previously caused new source files to be silently
+# skipped by `git add`, so they never reached the repository.
 *.tsbuildinfo
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

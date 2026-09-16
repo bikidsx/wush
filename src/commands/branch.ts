@@ -2,7 +2,8 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import chalk from 'chalk';
 import { GitService } from '../services/git.js';
-import { createAIProvider } from '../services/ai/factory.js';
+import { generateBranchName } from '../services/ai/tasks.js';
+import { friendlyError } from '../services/ai/friendly.js';
 import { logger } from '../utils/logger.js';
 
 interface BranchOptions {
@@ -84,12 +85,11 @@ async function createBranchWithAI(git: GitService): Promise<void> {
   const spinner = ora('Generating branch name...').start();
 
   try {
-    const ai = createAIProvider();
-    const response = await ai.generateBranchName(description, type);
+    const result = await generateBranchName(description, type);
     spinner.stop();
 
     const branchType = BRANCH_TYPES.find(t => t.value === type);
-    const suggestedName = `${branchType?.prefix}${response.content.trim()}`;
+    const suggestedName = `${branchType?.prefix}${result.value}`;
 
     logger.newline();
     logger.info('Suggested branch name:');
@@ -134,7 +134,9 @@ async function createBranchWithAI(git: GitService): Promise<void> {
     }
   } catch (error: any) {
     spinner.stop();
-    logger.error(`Failed to generate branch name: ${error.message}`);
+    const friendly = friendlyError(error);
+    logger.error(friendly.message);
+    if (friendly.hint) logger.dim(`  ${friendly.hint}`);
   }
 }
 

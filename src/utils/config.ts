@@ -1,53 +1,25 @@
 import Conf from 'conf';
 import type { Config } from '../types/index.js';
 
+export const CONFIG_VERSION = 2;
+
+/**
+ * Defaults deliberately contain no model lists. Models are discovered at
+ * runtime (see services/ai/models.ts); hardcoding them here is what caused
+ * stale and invalid model ids previously.
+ */
 const defaultConfig: Config = {
-  version: '1.0.0',
+  configVersion: CONFIG_VERSION,
   setupComplete: false,
   ai: {
-    provider: 'openai',
-    model: 'gpt-5',
-    apiKey: '',
-    temperature: 0.7,
-    maxTokens: 500,
+    providerId: 'openai',
+    model: '',
+    temperature: 0.4,
+    maxOutputTokens: 1024,
   },
-  providers: {
-    openai: {
-      apiKey: '',
-      defaultModel: 'gpt-5',
-      models: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-oss-120b', 'gpt-oss-20b'],
-    },
-    anthropic: {
-      apiKey: '',
-      defaultModel: 'claude-sonnet-4.5',
-      models: ['claude-sonnet-4.5', 'claude-haiku-4.5'],
-    },
-    google: {
-      apiKey: '',
-      defaultModel: 'gemini-2.5-pro',
-      models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
-      features: {
-        deepThink: true,
-      },
-    },
-    ollama: {
-      baseUrl: 'http://localhost:11434',
-      defaultModel: 'llama3.3:70b',
-      models: ['llama3.3:70b', 'llama3.1:405b', 'qwen3:72b', 'gpt-oss-120b', 'gpt-oss-20b'],
-    },
-    groq: {
-      apiKey: '',
-      defaultModel: 'gpt-oss-120b',
-      models: ['gpt-oss-120b', 'gpt-oss-20b', 'llama-4'],
-    },
-    azure: {
-      apiKey: '',
-      endpoint: '',
-      apiVersion: '2024-10-21',
-      defaultModel: 'gpt-4o',
-      models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-    },
-  },
+  providers: {},
+  customProviders: [],
+  modelCache: {},
   git: {
     conventionalCommits: true,
     autoStage: false,
@@ -61,12 +33,12 @@ const defaultConfig: Config = {
     defaultBranch: 'main',
   },
   ui: {
-    theme: 'default',
+    tui: true,
     emoji: true,
+    showUsage: true,
   },
   security: {
     scanOnCommit: false,
-    autoFix: false,
     ignorePatterns: ['*.test.ts', '*.spec.ts'],
     severity: {
       blockOnHigh: true,
@@ -79,6 +51,9 @@ const defaultConfig: Config = {
 export const config = new Conf<Config>({
   projectName: 'wush',
   defaults: defaultConfig,
+  // Lets tests (and sandboxed runs) redirect storage away from the real
+  // user config directory.
+  ...(process.env.WUSH_CONFIG_DIR ? { cwd: process.env.WUSH_CONFIG_DIR } : {}),
 });
 
 export function getConfig(): Config {
@@ -90,5 +65,22 @@ export function updateConfig(updates: Partial<Config>): void {
 }
 
 export function isSetupComplete(): boolean {
-  return config.get('setupComplete') === true;
+  return config.get('setupComplete') === true && !!config.get('ai')?.model;
+}
+
+/** Reads the settings blob for one provider, creating an empty one if absent. */
+export function getProviderSettings(providerId: string) {
+  return getConfig().providers?.[providerId] ?? {};
+}
+
+export function setProviderSettings(
+  providerId: string,
+  updates: Partial<Config['providers'][string]>
+): void {
+  const current = getProviderSettings(providerId);
+  config.set(`providers.${providerId}`, { ...current, ...updates });
+}
+
+export function resetConfig(): void {
+  config.clear();
 }

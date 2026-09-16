@@ -1,23 +1,74 @@
-export type AIProvider = 'openai' | 'anthropic' | 'google' | 'ollama' | 'groq' | 'azure';
+/** Per-provider stored settings. Keyed by provider id, not a fixed union. */
+export interface ProviderSettings {
+  apiKey?: string;
+  /** Overrides the provider default (self-hosted, proxy, regional endpoint). */
+  baseUrl?: string;
+  /** Last model chosen for this provider, so switching back is sticky. */
+  lastModel?: string;
+  /** Azure-only. */
+  resourceName?: string;
+  apiVersion?: string;
+}
+
+/** A user-defined OpenAI-compatible endpoint. */
+export interface CustomProvider {
+  id: string;
+  label: string;
+  baseUrl: string;
+  /** Name of an env var holding the key, preferred over storing it. */
+  apiKeyEnv?: string;
+  supportsStructuredOutputs?: boolean;
+}
+
+/** What a model can be used for, as reported by the provider. */
+export type ModelKind =
+  | 'language'
+  | 'embedding'
+  | 'image'
+  | 'speech'
+  | 'transcription'
+  | 'video'
+  | 'reranking'
+  | 'moderation'
+  | 'unknown';
+
+export interface ModelInfo {
+  id: string;
+  label?: string;
+  description?: string;
+  /** Epoch milliseconds, when the provider reports a creation date. */
+  createdAt?: number;
+  /** Omitted when the provider gives no capability signal. */
+  kind?: ModelKind;
+  /** True when the provider signals the model is deprecated or inactive. */
+  deprecated?: boolean;
+  /** Why it was flagged, shown to the user rather than hidden silently. */
+  deprecationNote?: string;
+  /** A pinned dated snapshot such as gpt-4o-2024-11-20. */
+  snapshot?: boolean;
+}
+
+/** Cached model discovery result per provider id. */
+export interface ModelCacheEntry {
+  models: ModelInfo[];
+  fetchedAt: number;
+}
 
 export interface Config {
-  version: string;
+  /** Config schema version. Bumped when the shape changes. */
+  configVersion: number;
   setupComplete: boolean;
   ai: {
-    provider: AIProvider;
+    /** Provider id from the registry, or a custom provider id. */
+    providerId: string;
     model: string;
-    apiKey: string;
     temperature: number;
-    maxTokens: number;
+    maxOutputTokens: number;
   };
-  providers: {
-    openai: ProviderConfig;
-    anthropic: ProviderConfig;
-    google: GoogleProviderConfig;
-    ollama: OllamaProviderConfig;
-    groq: ProviderConfig;
-    azure: AzureProviderConfig;
-  };
+  /** Dynamic map — any provider id, including user-defined ones. */
+  providers: Record<string, ProviderSettings>;
+  customProviders: CustomProvider[];
+  modelCache: Record<string, ModelCacheEntry>;
   git: {
     conventionalCommits: boolean;
     autoStage: boolean;
@@ -31,12 +82,14 @@ export interface Config {
     defaultBranch: string;
   };
   ui: {
-    theme: string;
+    /** Render the ink TUI instead of plain prompts. */
+    tui: boolean;
     emoji: boolean;
+    /** Show token counts and estimated cost after each call. */
+    showUsage: boolean;
   };
   security: {
     scanOnCommit: boolean;
-    autoFix: boolean;
     ignorePatterns: string[];
     severity: {
       blockOnHigh: boolean;
@@ -46,42 +99,32 @@ export interface Config {
   };
 }
 
-export interface ProviderConfig {
-  apiKey: string;
-  defaultModel: string;
-  models: string[];
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
 }
 
-export interface GoogleProviderConfig extends ProviderConfig {
-  features: {
-    deepThink: boolean;
-  };
-}
-
-export interface OllamaProviderConfig extends Omit<ProviderConfig, 'apiKey'> {
-  baseUrl: string;
-}
-
-export interface AzureProviderConfig extends ProviderConfig {
-  endpoint: string;
-  apiVersion: string;
-}
-
-export interface AIResponse {
-  content: string;
+export interface AIResult<T> {
+  value: T;
   model: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
+  providerId: string;
+  usage?: TokenUsage;
 }
 
 export interface CommitMessage {
-  title: string;
-  body: string;
-  type?: string;
+  type: string;
   scope?: string;
+  subject: string;
+  body?: string;
+}
+
+export interface PRDescription {
+  title: string;
+  summary: string;
+  changes: string[];
+  testing?: string;
+  notes?: string;
 }
 
 export interface Vulnerability {

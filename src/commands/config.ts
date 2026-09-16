@@ -1,21 +1,50 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import { config, getConfig } from '../utils/config.js';
+import { config, getConfig, resetConfig, setProviderSettings } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
-import type { AIProvider } from '../types/index.js';
+import {
+  addCustomProvider,
+  configureProviderCredentials,
+  runProviderWizard,
+  selectModel,
+} from '../utils/providerSetup.js';
+import { availableProviders } from '../services/ai/model.js';
+import { clearModelCache } from '../services/ai/models.js';
 
 export async function configCommand(): Promise<void> {
-  const currentConfig = getConfig();
+  const cfg = getConfig();
+  const providers = availableProviders(cfg);
+  const active = providers.find((p) => p.id === cfg.ai.providerId);
+
+  // Show whether the key comes from the environment, since that overrides config.
+  const envKey = active?.envKeys.find((k) => process.env[k]?.trim());
+  const keyStatus = envKey
+    ? chalk.green(`from ${envKey}`)
+    : cfg.providers?.[cfg.ai.providerId]?.apiKey
+      ? chalk.green('stored')
+      : active?.auth === 'none'
+        ? chalk.dim('not needed')
+        : chalk.red('missing');
 
   logger.newline();
   console.log(chalk.bold('Current Configuration:\n'));
-  console.log(chalk.dim('AI Provider:'), chalk.cyan(currentConfig.ai.provider));
-  console.log(chalk.dim('Model:'), chalk.cyan(currentConfig.ai.model));
-  console.log(chalk.dim('Conventional Commits:'), currentConfig.git.conventionalCommits ? chalk.green('enabled') : chalk.red('disabled'));
-  console.log(chalk.dim('GitHub Connected:'), currentConfig.github.token ? chalk.green('yes') : chalk.red('no'));
-  console.log(chalk.dim('Scan on Commit:'), currentConfig.security.scanOnCommit ? chalk.green('enabled') : chalk.red('disabled'));
-  console.log(chalk.dim('Commit Instructions:'), currentConfig.instructions?.commit ? chalk.green('custom') : chalk.dim('default'));
-  console.log(chalk.dim('PR Instructions:'), currentConfig.instructions?.pr ? chalk.green('custom') : chalk.dim('default'));
+  console.log(chalk.dim('Provider:'), chalk.cyan(active?.label ?? cfg.ai.providerId));
+  console.log(chalk.dim('Model:'), chalk.cyan(cfg.ai.model || '(none selected)'));
+  console.log(chalk.dim('API key:'), keyStatus);
+  console.log(
+    chalk.dim('Conventional Commits:'),
+    cfg.git.conventionalCommits ? chalk.green('enabled') : chalk.red('disabled')
+  );
+  console.log(
+    chalk.dim('GitHub:'),
+    cfg.github.token || process.env.GITHUB_TOKEN ? chalk.green('connected') : chalk.red('no')
+  );
+  console.log(
+    chalk.dim('Custom providers:'),
+    (cfg.customProviders ?? []).length > 0
+      ? chalk.cyan((cfg.customProviders ?? []).map((c) => c.label).join(', '))
+      : chalk.dim('none')
+  );
   logger.newline();
 
   const { action } = await inquirer.prompt([
@@ -23,15 +52,20 @@ export async function configCommand(): Promise<void> {
       type: 'list',
       name: 'action',
       message: 'What would you like to configure?',
+      pageSize: 12,
       choices: [
-        { name: 'Change AI Provider', value: 'provider' },
-        { name: 'Update API Key', value: 'apikey' },
-        { name: 'Change Model', value: 'model' },
-        { name: 'Git Settings', value: 'git' },
-        { name: 'GitHub Token', value: 'github' },
-        { name: 'Custom Instructions', value: 'instructions' },
-        { name: 'Security Settings', value: 'security' },
-        { name: 'Reset All', value: 'reset' },
+        { name: 'Switch provider or model', value: 'provider' },
+        { name: 'Change model only', value: 'model' },
+        { name: 'Update credentials', value: 'credentials' },
+        { name: 'Add a custom endpoint', value: 'custom' },
+        { name: 'Remove a custom endpoint', value: 'removeCustom' },
+        { name: 'Refresh model lists', value: 'refresh' },
+        { name: 'Git settings', value: 'git' },
+        { name: 'GitHub token', value: 'github' },
+        { name: 'Custom instructions', value: 'instructions' },
+        { name: 'Security settings', value: 'security' },
+        { name: 'Interface settings', value: 'ui' },
+        { name: 'Reset all', value: 'reset' },
         { name: 'Exit', value: 'exit' },
       ],
     },
@@ -39,13 +73,28 @@ export async function configCommand(): Promise<void> {
 
   switch (action) {
     case 'provider':
-      await changeProvider();
+      await runProviderWizard();
       break;
-    case 'apikey':
-      await updateApiKey();
+    case 'model': {
+      const model = await selectModel(cfg.ai.providerId);
+      config.set('ai.model', model);
+      setProviderSettings(cfg.ai.providerId, { lastModel: model });
+      logger.success(`Model changed to ${model}`);
       break;
-    case 'model':
-      await changeModel();
+    }
+    case 'credentials':
+      await configureProviderCredentials(cfg.ai.providerId);
+      logger.success('Credentials updated');
+      break;
+    case 'custom':
+      await addCustomProvider();
+      break;
+    case 'removeCustom':
+      await removeCustomProvider();
+      break;
+    case 'refresh':
+      clearModelCache();
+      logger.success('Model cache cleared; lists refresh on next use');
       break;
     case 'git':
       await configureGit();
@@ -59,78 +108,59 @@ export async function configCommand(): Promise<void> {
     case 'security':
       await configureSecurity();
       break;
-    case 'reset':
-      config.clear();
-      logger.success('Configuration reset to defaults');
+    case 'ui':
+      await configureUI();
       break;
+    case 'reset': {
+      const { confirmReset } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'confirmReset',
+          message: 'Reset all settings, including stored API keys and custom endpoints?',
+          default: false,
+        },
+      ]);
+      if (confirmReset) {
+        resetConfig();
+        logger.success('Configuration reset to defaults');
+      } else {
+        logger.info('Reset cancelled');
+      }
+      break;
+    }
   }
 }
 
-async function changeProvider(): Promise<void> {
-  const { provider } = await inquirer.prompt<{ provider: AIProvider }>([
-    {
-      type: 'list',
-      name: 'provider',
-      message: 'Select AI provider:',
-      choices: [
-        { name: 'OpenAI (GPT-5, GPT-5 mini, GPT-5 nano)', value: 'openai' },
-        { name: 'Anthropic (Claude Sonnet 4.5, Haiku 4.5)', value: 'anthropic' },
-        { name: 'Google (Gemini 2.5 Pro, Gemini 2.5 Flash)', value: 'google' },
-        { name: 'Ollama (Local - Free)', value: 'ollama' },
-        { name: 'Groq (Fast inference)', value: 'groq' },
-      ],
-    },
-  ]);
+async function removeCustomProvider(): Promise<void> {
+  const customs = getConfig().customProviders ?? [];
 
-  config.set('ai.provider', provider);
-  
-  // Set default model for provider
-  const cfg = getConfig();
-  const defaultModel = cfg.providers[provider].defaultModel;
-  config.set('ai.model', defaultModel);
-
-  logger.success(`Provider changed to ${provider}`);
-}
-
-async function updateApiKey(): Promise<void> {
-  const cfg = getConfig();
-  const provider = cfg.ai.provider;
-
-  if (provider === 'ollama') {
-    logger.info('Ollama does not require an API key');
+  if (customs.length === 0) {
+    logger.info('No custom providers configured');
     return;
   }
 
-  const { apiKey } = await inquirer.prompt([
-    {
-      type: 'password',
-      name: 'apiKey',
-      message: `Enter your ${provider} API key:`,
-      validate: (input: string) => input.length > 0 || 'API key is required',
-    },
-  ]);
-
-  config.set(`providers.${provider}.apiKey`, apiKey);
-  config.set('ai.apiKey', apiKey);
-  logger.success('API key updated');
-}
-
-async function changeModel(): Promise<void> {
-  const cfg = getConfig();
-  const provider = cfg.ai.provider;
-  const models = cfg.providers[provider].models;
-
-  const { model } = await inquirer.prompt([
+  const { id } = await inquirer.prompt([
     {
       type: 'list',
-      name: 'model',
-      message: 'Select model:',
-      choices: models,
+      name: 'id',
+      message: 'Remove which custom endpoint?',
+      choices: customs.map((c) => ({ name: `${c.label} (${c.baseUrl})`, value: c.id })),
     },
   ]);
 
-  config.set('ai.model', model);
-  logger.success(`Model changed to ${model}`);
+  config.set(
+    'customProviders',
+    customs.filter((c) => c.id !== id)
+  );
+  clearModelCache(id);
+
+  // Leaving the active provider pointing at a deleted endpoint would break every command.
+  if (getConfig().ai.providerId === id) {
+    logger.warning('That was your active provider — choose a replacement.');
+    await runProviderWizard();
+  } else {
+    logger.success('Custom endpoint removed');
+  }
 }
 
 async function configureGit(): Promise<void> {
@@ -139,13 +169,13 @@ async function configureGit(): Promise<void> {
       type: 'confirm',
       name: 'conventionalCommits',
       message: 'Enable conventional commits?',
-      default: true,
+      default: getConfig().git.conventionalCommits,
     },
     {
       type: 'confirm',
       name: 'autoStage',
       message: 'Auto-stage all changes before commit?',
-      default: false,
+      default: getConfig().git.autoStage,
     },
   ]);
 
@@ -155,40 +185,45 @@ async function configureGit(): Promise<void> {
 }
 
 async function configureGitHub(): Promise<void> {
+  if (process.env.GITHUB_TOKEN?.trim()) {
+    logger.info('GITHUB_TOKEN is set in your environment and takes precedence.');
+  }
+
   const { token, defaultBranch } = await inquirer.prompt([
     {
       type: 'password',
       name: 'token',
-      message: 'Enter GitHub token:',
+      mask: '*',
+      message: 'Enter GitHub token (blank to keep current):',
     },
     {
       type: 'input',
       name: 'defaultBranch',
       message: 'Default target branch for PRs:',
-      default: 'main',
+      default: getConfig().github.defaultBranch,
     },
   ]);
 
-  if (token) {
-    config.set('github.token', token);
-  }
-  config.set('github.defaultBranch', defaultBranch);
+  if (token?.trim()) config.set('github.token', token.trim());
+  config.set('github.defaultBranch', defaultBranch.trim());
   logger.success('GitHub settings updated');
 }
 
 async function configureSecurity(): Promise<void> {
+  const current = getConfig().security;
+
   const { scanOnCommit, blockOnHigh } = await inquirer.prompt([
     {
       type: 'confirm',
       name: 'scanOnCommit',
       message: 'Run security scan before each commit?',
-      default: false,
+      default: current.scanOnCommit,
     },
     {
       type: 'confirm',
       name: 'blockOnHigh',
       message: 'Block commits with HIGH severity issues?',
-      default: true,
+      default: current.severity.blockOnHigh,
     },
   ]);
 
@@ -197,10 +232,39 @@ async function configureSecurity(): Promise<void> {
   logger.success('Security settings updated');
 }
 
+async function configureUI(): Promise<void> {
+  const current = getConfig().ui;
+
+  const { tui, showUsage, emoji } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'tui',
+      message: 'Use the interactive full-screen interface?',
+      default: current.tui,
+    },
+    {
+      type: 'confirm',
+      name: 'showUsage',
+      message: 'Show token usage after each AI call?',
+      default: current.showUsage,
+    },
+    {
+      type: 'confirm',
+      name: 'emoji',
+      message: 'Use emoji in output?',
+      default: current.emoji,
+    },
+  ]);
+
+  config.set('ui.tui', tui);
+  config.set('ui.showUsage', showUsage);
+  config.set('ui.emoji', emoji);
+  logger.success('Interface settings updated');
+}
 
 async function configureInstructions(): Promise<void> {
   const cfg = getConfig();
-  
+
   const { type } = await inquirer.prompt([
     {
       type: 'list',
@@ -221,19 +285,14 @@ async function configureInstructions(): Promise<void> {
     return;
   }
 
-  const currentInstruction = cfg.instructions?.[type as 'commit' | 'pr'] || '';
-  
-  console.log(chalk.dim('\nExamples of custom instructions:'));
-  if (type === 'commit') {
-    console.log(chalk.dim('  - "Always include ticket number like JIRA-123"'));
-    console.log(chalk.dim('  - "Use emoji at the start of commit messages"'));
-    console.log(chalk.dim('  - "Keep messages under 50 characters"'));
-    console.log(chalk.dim('  - "Include the affected module in parentheses"'));
+  const key = type as 'commit' | 'pr';
+  console.log(chalk.dim('\nExamples:'));
+  if (key === 'commit') {
+    console.log(chalk.dim('  - "Always include the ticket number like JIRA-123"'));
+    console.log(chalk.dim('  - "Keep subjects under 50 characters"'));
   } else {
     console.log(chalk.dim('  - "Always include a Testing section"'));
-    console.log(chalk.dim('  - "Link related Jira tickets"'));
-    console.log(chalk.dim('  - "Include screenshots for UI changes"'));
-    console.log(chalk.dim('  - "Add deployment notes section"'));
+    console.log(chalk.dim('  - "Add deployment notes"'));
   }
   logger.newline();
 
@@ -241,16 +300,13 @@ async function configureInstructions(): Promise<void> {
     {
       type: 'editor',
       name: 'instruction',
-      message: `Enter custom ${type} instructions (leave empty for default):`,
-      default: currentInstruction,
+      message: `Enter custom ${key} instructions (leave empty for default):`,
+      default: cfg.instructions?.[key] || '',
     },
   ]);
 
-  config.set(`instructions.${type}`, instruction.trim());
-  
-  if (instruction.trim()) {
-    logger.success(`Custom ${type} instructions saved`);
-  } else {
-    logger.info(`Using default ${type} instructions`);
-  }
+  config.set(`instructions.${key}`, instruction.trim());
+  logger.success(
+    instruction.trim() ? `Custom ${key} instructions saved` : `Using default ${key} instructions`
+  );
 }

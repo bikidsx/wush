@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'fs/promises';
 import { join, extname } from 'path';
 import { scanWithPatterns } from './patterns.js';
-import { createAIProvider } from '../ai/factory.js';
+import { analyzeSecurityIssues } from '../ai/tasks.js';
 import type { Vulnerability, ScanResult } from '../../types/index.js';
 import { getConfig } from '../../utils/config.js';
 
@@ -46,23 +46,19 @@ export class SecurityScanner {
   async scanWithAI(filepath: string): Promise<Vulnerability[]> {
     try {
       const code = await readFile(filepath, 'utf-8');
-      const ai = createAIProvider();
-      const response = await ai.analyzeSecurityIssues(code, filepath);
-      
-      // Parse AI response
-      const jsonMatch = response.content.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        const findings = JSON.parse(jsonMatch[0]);
-        return findings.map((f: any) => ({
-          severity: f.severity,
-          type: f.type,
-          file: filepath,
-          line: f.line,
-          description: f.issue,
-          fix: f.fix,
-        }));
-      }
-      return [];
+      const result = await analyzeSecurityIssues(code, filepath);
+
+      // Schema-validated by the SDK, so no JSON recovery from prose is needed.
+      // `line` is nullable in the schema (OpenAI strict mode forbids optional
+      // properties), so normalise null to undefined here.
+      return result.value.findings.map((f) => ({
+        severity: f.severity,
+        type: f.type,
+        file: filepath,
+        line: f.line ?? undefined,
+        description: f.description,
+        fix: f.fix,
+      }));
     } catch {
       return [];
     }
