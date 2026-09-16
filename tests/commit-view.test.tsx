@@ -45,7 +45,13 @@ await mock.module('../src/services/git.js', () => ({
 }));
 
 await mock.module('../src/services/ai/model.js', () => ({
-  resolveModel: () => ({
+  // The view reads identity synchronously for the status bar.
+  describeSelection: () => ({
+    providerId: 'mock',
+    providerLabel: 'Mock Provider',
+    modelId: 'mock-model',
+  }),
+  resolveModel: async () => ({
     providerLabel: 'Mock Provider',
     modelId: 'mock-model',
     providerId: 'mock',
@@ -84,13 +90,13 @@ describe('CommitView', () => {
   });
 
   test('accepting commits the formatted message', async () => {
-    let exited: { committed: boolean } | null = null;
+    const exited: { value: { committed: boolean } | null } = { value: null };
 
     const { stdin, unmount } = render(
       <CommitView
         diff="d"
         stagedFiles={['a.ts']}
-        onExit={(summary) => (exited = summary)}
+        onExit={(summary) => (exited.value = summary)}
       />
     );
 
@@ -100,14 +106,14 @@ describe('CommitView', () => {
     unmount();
 
     expect(committed).toEqual(['feat(auth): add token refresh\n\nSessions had no renewal path.']);
-    expect(exited?.committed).toBe(true);
+    expect(exited.value?.committed).toBe(true);
   });
 
   test('cancelling exits without committing', async () => {
-    let exited: { committed: boolean } | null = null;
+    const exited: { value: { committed: boolean } | null } = { value: null };
 
     const { stdin, unmount } = render(
-      <CommitView diff="d" stagedFiles={[]} onExit={(summary) => (exited = summary)} />
+      <CommitView diff="d" stagedFiles={[]} onExit={(summary) => (exited.value = summary)} />
     );
 
     await wait(200);
@@ -116,7 +122,7 @@ describe('CommitView', () => {
     unmount();
 
     expect(committed).toEqual([]);
-    expect(exited?.committed).toBe(false);
+    expect(exited.value?.committed).toBe(false);
   });
 
   test('shows a plural file count correctly', async () => {

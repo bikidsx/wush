@@ -12,13 +12,14 @@ import { statusCommand } from './commands/status.js';
 import { configCommand } from './commands/config.js';
 import { branchCommand } from './commands/branch.js';
 import { modelsCommand, providersCommand } from './commands/models.js';
+import { VERSION } from './version.js';
 
 const program = new Command();
 
 program
   .name('wush')
   .description('AI-powered Git workflow CLI')
-  .version('1.0.0');
+  .version(VERSION);
 
 // Middleware to check setup
 async function ensureSetup(): Promise<void> {
@@ -125,8 +126,8 @@ program
 program
   .command('providers')
   .description('List configured AI providers and their readiness')
-  .action(() => {
-    providersCommand();
+  .action(async () => {
+    await providersCommand();
   });
 
 // Config command

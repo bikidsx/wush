@@ -105,7 +105,7 @@ describe('model discovery', () => {
   test('falls back to known ids when the provider cannot be reached', async () => {
     globalThis.fetch = (async () => {
       throw new Error('ECONNREFUSED');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const { models, source } = await listModels('anthropic', { refresh: true });
     expect(source).toBe('fallback');

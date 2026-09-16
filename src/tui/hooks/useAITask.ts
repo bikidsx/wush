@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toFriendlyError, type FriendlyError } from '../../services/ai/errors.js';
+import type { FriendlyError } from '../../services/ai/errors.js';
+import { friendlyError } from '../../services/ai/friendly.js';
 import type { AIResult } from '../../types/index.js';
 import type { TaskOptions } from '../../services/ai/tasks.js';
 
@@ -76,7 +77,7 @@ export function useAITask<T, P = Partial<T>>(
           setPhase('cancelled');
           return;
         }
-        setError(toFriendlyError(err));
+        setError(friendlyError(err));
         setPhase('error');
       });
   }, [task]);

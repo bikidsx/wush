@@ -79,14 +79,19 @@ async function runStructured<T>(
   const abortSignal = withTimeout(options.abortSignal, DEFAULT_TIMEOUT_MS);
   const output = Output.object({ schema });
 
+  // CLI-backed providers reject these and warn once per call, so only send
+  // them where they actually take effect.
+  const sampling = resolved.supportsSamplingParams
+    ? { maxOutputTokens, temperature: getConfig().ai.temperature }
+    : {};
+
   const shared = {
     model: resolved.model,
     system,
     prompt,
     output,
     abortSignal,
-    maxOutputTokens,
-    temperature: getConfig().ai.temperature,
+    ...sampling,
   };
 
   if (options.onPartial) {
@@ -133,7 +138,10 @@ export async function generateCommitMessage(
   options: TaskOptions = {}
 ): Promise<AIResult<CommitMessageOutput>> {
   const config = getConfig();
-  const resolved = resolveModel({ providerId: options.providerId, model: options.model }, config);
+  const resolved = await resolveModel(
+    { providerId: options.providerId, model: options.model },
+    config
+  );
 
   return runStructured<CommitMessageOutput>(
     resolved,
@@ -154,7 +162,10 @@ export async function generatePRDescription(
   options: TaskOptions = {}
 ): Promise<AIResult<PRDescriptionOutput>> {
   const config = getConfig();
-  const resolved = resolveModel({ providerId: options.providerId, model: options.model }, config);
+  const resolved = await resolveModel(
+    { providerId: options.providerId, model: options.model },
+    config
+  );
 
   return runStructured<PRDescriptionOutput>(
     resolved,
@@ -173,7 +184,7 @@ export async function generateBranchName(
   type: string,
   options: TaskOptions = {}
 ): Promise<AIResult<string>> {
-  const resolved = resolveModel({ providerId: options.providerId, model: options.model });
+  const resolved = await resolveModel({ providerId: options.providerId, model: options.model });
 
   const result = await runStructured<{ name: string }>(
     resolved,
@@ -200,7 +211,7 @@ export async function analyzeSecurityIssues(
   filename: string,
   options: TaskOptions = {}
 ): Promise<AIResult<SecurityFindingsOutput>> {
-  const resolved = resolveModel({ providerId: options.providerId, model: options.model });
+  const resolved = await resolveModel({ providerId: options.providerId, model: options.model });
 
   return runStructured<SecurityFindingsOutput>(
     resolved,
@@ -216,12 +227,12 @@ export async function analyzeSecurityIssues(
  * Streams plain text. Used by the TUI for free-form explanations where no
  * schema applies.
  */
-export function streamPlainText(
+export async function streamPlainText(
   system: string,
   prompt: string,
   options: TaskOptions = {}
 ) {
-  const resolved = resolveModel({ providerId: options.providerId, model: options.model });
+  const resolved = await resolveModel({ providerId: options.providerId, model: options.model });
   return streamText({
     model: resolved.model,
     system,

@@ -159,7 +159,7 @@ describe('provider resolution', () => {
     expect(availableProviders(config).map((p) => p.id)).toContain('lmstudio');
   });
 
-  test('builds a usable model handle for a custom endpoint', () => {
+  test('builds a usable model handle for a custom endpoint', async () => {
     const config = makeConfig({
       ai: { ...makeConfig().ai, providerId: 'lmstudio', model: 'local-model' },
       customProviders: [
@@ -168,13 +168,13 @@ describe('provider resolution', () => {
       providers: { lmstudio: { apiKey: 'x', baseUrl: 'http://localhost:1234/v1' } },
     });
 
-    const resolved = resolveModel({}, config);
+    const resolved = await resolveModel({}, config);
     expect(resolved.modelId).toBe('local-model');
     expect(resolved.providerId).toBe('lmstudio');
     expect(resolved.model).toBeDefined();
   });
 
-  test('does not carry a model id across a provider switch', () => {
+  test('does not carry a model id across a provider switch', async () => {
     const config = makeConfig({
       ai: { ...makeConfig().ai, providerId: 'openai', model: 'gpt-4o' },
       providers: {
@@ -184,7 +184,7 @@ describe('provider resolution', () => {
     });
 
     // Requesting anthropic must not inherit OpenAI's selected model.
-    const resolved = resolveModel({ providerId: 'anthropic' }, config);
+    const resolved = await resolveModel({ providerId: 'anthropic' }, config);
     expect(resolved.modelId).toBe('claude-haiku-4-5');
   });
 });

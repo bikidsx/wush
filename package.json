@@ -1,6 +1,6 @@
 {
   "name": "wush",
-  "version": "1.0.5",
+  "version": "2.0.5",
   "description": "AI-powered Git workflow CLI - smart commits, PRs, and security scanning",
   "type": "module",
   "bin": {
@@ -12,11 +12,12 @@
   ],
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target node --format esm --minify",
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --minify --external ai-sdk-provider-claude-code --external ai-sdk-provider-codex-cli --external @anthropic-ai/claude-agent-sdk",
     "prepublishOnly": "bun run build",
     "start": "node dist/index.js",
     "test": "bun test",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "verify": "bun run type-check && bun test && bun run build"
   },
   "keywords": [
     "git",
@@ -81,5 +82,9 @@
     "ink-testing-library": "4.0.0",
     "react-devtools-core": "^6.1.2",
     "typescript": "^5.7.2"
+  },
+  "optionalDependencies": {
+    "ai-sdk-provider-claude-code": "4.3.1",
+    "ai-sdk-provider-codex-cli": "2.2.1"
   }
 }

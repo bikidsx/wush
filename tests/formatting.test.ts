@@ -12,12 +12,19 @@ import { ProviderConfigError } from '../src/services/ai/model.js';
 describe('commit message formatting', () => {
   test('renders a conventional header', () => {
     expect(
-      formatCommitMessage({ type: 'feat', scope: 'auth', subject: 'add token refresh' })
+      formatCommitMessage({
+        type: 'feat',
+        scope: 'auth',
+        subject: 'add token refresh',
+        body: null,
+      })
     ).toBe('feat(auth): add token refresh');
   });
 
   test('omits the scope when absent', () => {
-    expect(formatCommitMessage({ type: 'fix', subject: 'correct off-by-one' })).toBe(
+    expect(
+      formatCommitMessage({ type: 'fix', scope: null, subject: 'correct off-by-one', body: null })
+    ).toBe(
       'fix: correct off-by-one'
     );
   });
@@ -25,6 +32,7 @@ describe('commit message formatting', () => {
   test('separates the body with a blank line, as git expects', () => {
     const text = formatCommitMessage({
       type: 'perf',
+      scope: null,
       subject: 'cache diff parsing',
       body: 'Parsing dominated commit latency.',
     });
@@ -32,7 +40,9 @@ describe('commit message formatting', () => {
   });
 
   test('ignores a whitespace-only body', () => {
-    expect(formatCommitMessage({ type: 'chore', subject: 'bump deps', body: '   ' })).toBe(
+    expect(
+      formatCommitMessage({ type: 'chore', scope: null, subject: 'bump deps', body: '   ' })
+    ).toBe(
       'chore: bump deps'
     );
   });
@@ -49,6 +59,7 @@ describe('PR body formatting', () => {
       summary: 'Adds a pull command with safety checks.',
       changes: ['Add pull command', 'Warn on dirty tree'],
       testing: 'Manual run against a dirty tree.',
+      notes: null,
     });
 
     expect(body).toContain('## Summary');
@@ -59,13 +70,26 @@ describe('PR body formatting', () => {
     expect(body).not.toContain('## Notes');
   });
 
-  test('requires the fields the PR command consumes', () => {
+  test('requires the fields the PR command consumes, with nullables present', () => {
+    // Nullable rather than optional for OpenAI strict mode, so the keys must
+    // exist even when empty. See tests/strict-schema.test.ts.
+    const parsed = prDescriptionSchema.safeParse({
+      title: 'x',
+      summary: 'y',
+      changes: ['z'],
+      testing: null,
+      notes: null,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  test('omitting a nullable key is rejected', () => {
     const parsed = prDescriptionSchema.safeParse({
       title: 'x',
       summary: 'y',
       changes: ['z'],
     });
-    expect(parsed.success).toBe(true);
+    expect(parsed.success).toBe(false);
   });
 });
 

@@ -2,9 +2,10 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { availableProviders } from '../services/ai/model.js';
 import { clearModelCache, listModels } from '../services/ai/models.js';
+import { isCliAvailable } from '../services/ai/cli.js';
 import { getConfig } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
-import { toFriendlyError } from '../services/ai/errors.js';
+import { friendlyError } from '../services/ai/friendly.js';
 
 interface ModelsOptions {
   provider?: string;
@@ -83,7 +84,7 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
     logger.newline();
   } catch (error) {
     spinner.stop();
-    const friendly = toFriendlyError(error, { providerLabel: definition.label });
+    const friendly = friendlyError(error, providerId);
     logger.error(friendly.message);
     if (friendly.hint) logger.dim(`  ${friendly.hint}`);
     process.exit(1);
@@ -91,7 +92,7 @@ export async function modelsCommand(options: ModelsOptions): Promise<void> {
 }
 
 /** Lists every provider and whether it is ready to use. */
-export function providersCommand(): void {
+export async function providersCommand(): Promise<void> {
   const cfg = getConfig();
 
   logger.newline();
@@ -102,20 +103,33 @@ export function providersCommand(): void {
     const envKey = provider.envKeys.find((k) => process.env[k]?.trim());
     const stored = cfg.providers?.[provider.id]?.apiKey;
 
-    const ready =
-      provider.auth === 'none'
-        ? chalk.green('ready')
-        : envKey
-          ? chalk.green(`ready (${envKey})`)
-          : stored
-            ? chalk.green('ready (stored key)')
-            : chalk.dim('needs a key');
+    let ready: string;
+    if (provider.auth === 'subscription' && provider.requiresCli) {
+      // Readiness here means the vendor CLI exists; it holds the credentials.
+      const installed = await isCliAvailable(provider.requiresCli);
+      ready = installed
+        ? chalk.green(`ready (${provider.requiresCli} CLI)`)
+        : chalk.dim(`needs the ${provider.requiresCli} CLI`);
+    } else if (provider.auth === 'none') {
+      ready = chalk.green('ready');
+    } else if (envKey) {
+      ready = chalk.green(`ready (${envKey})`);
+    } else if (stored) {
+      ready = chalk.green('ready (stored key)');
+    } else {
+      ready = chalk.dim('needs a key');
+    }
 
     const marker = active ? chalk.green('→') : ' ';
     const name = active ? chalk.green.bold(provider.label) : provider.label;
 
     console.log(`  ${marker} ${name} ${chalk.dim(`[${provider.id}]`)}  ${ready}`);
     console.log(chalk.dim(`      ${provider.description}`));
+
+    if (provider.auth === 'subscription' && provider.setupHint) {
+      const installed = await isCliAvailable(provider.requiresCli ?? '');
+      if (!installed) console.log(chalk.dim(`      ${provider.setupHint}`));
+    }
   }
 
   logger.newline();

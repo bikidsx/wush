@@ -3,7 +3,7 @@ import ora from 'ora';
 import chalk from 'chalk';
 import { GitService } from '../services/git.js';
 import { generateBranchName } from '../services/ai/tasks.js';
-import { toFriendlyError } from '../services/ai/errors.js';
+import { friendlyError } from '../services/ai/friendly.js';
 import { logger } from '../utils/logger.js';
 
 interface BranchOptions {
@@ -134,7 +134,7 @@ async function createBranchWithAI(git: GitService): Promise<void> {
     }
   } catch (error: any) {
     spinner.stop();
-    const friendly = toFriendlyError(error);
+    const friendly = friendlyError(error);
     logger.error(friendly.message);
     if (friendly.hint) logger.dim(`  ${friendly.hint}`);
   }

@@ -9,10 +9,12 @@
 import {
   APICallError,
   InvalidToolInputError,
+  LoadAPIKeyError,
   NoObjectGeneratedError,
   NoOutputGeneratedError,
 } from 'ai';
 import { ProviderConfigError } from './model.js';
+import { OptionalProviderError } from './optionalProviders.js';
 
 export interface FriendlyError {
   message: string;
@@ -21,11 +23,35 @@ export interface FriendlyError {
   retryable: boolean;
 }
 
-export function toFriendlyError(error: unknown, context?: { providerLabel?: string }): FriendlyError {
+export function toFriendlyError(
+  error: unknown,
+  context?: { providerLabel?: string; loginCommand?: string }
+): FriendlyError {
   const who = context?.providerLabel ?? 'the AI provider';
 
   if (error instanceof ProviderConfigError) {
     return { message: error.message, hint: error.hint, retryable: false };
+  }
+
+  if (error instanceof OptionalProviderError) {
+    return { message: error.message, hint: error.hint, retryable: false };
+  }
+
+  // Subscription providers surface a missing CLI login this way. Sending the
+  // user to `wush config` would be a dead end: the credentials live in the
+  // vendor CLI, so they must log in there.
+  if (LoadAPIKeyError.isInstance(error)) {
+    const cliHint = context?.loginCommand
+      ? `Run \`${context.loginCommand}\` to sign in.`
+      : 'Sign in with the provider CLI, or configure an API key with `wush config`.';
+
+    return {
+      message: /not logged in/i.test(error.message)
+        ? `${who} is not logged in.`
+        : `${who} could not load credentials.`,
+      hint: cliHint,
+      retryable: false,
+    };
   }
 
   if (NoOutputGeneratedError.isInstance(error)) {

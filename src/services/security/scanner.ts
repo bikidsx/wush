@@ -49,11 +49,13 @@ export class SecurityScanner {
       const result = await analyzeSecurityIssues(code, filepath);
 
       // Schema-validated by the SDK, so no JSON recovery from prose is needed.
+      // `line` is nullable in the schema (OpenAI strict mode forbids optional
+      // properties), so normalise null to undefined here.
       return result.value.findings.map((f) => ({
         severity: f.severity,
         type: f.type,
         file: filepath,
-        line: f.line,
+        line: f.line ?? undefined,
         description: f.description,
         fix: f.fix,
       }));

@@ -110,24 +110,73 @@ export interface ResolvedModel {
   providerId: string;
   providerLabel: string;
   supportsStructuredOutputs: boolean;
+  /** False for CLI-backed providers that ignore temperature/maxOutputTokens. */
+  supportsSamplingParams: boolean;
 }
 
-/** Resolves the configured (or explicitly requested) model. */
-export function resolveModel(
+/** Provider and model identity, without building a handle or needing credentials. */
+export interface ModelSelection {
+  providerId: string;
+  providerLabel: string;
+  modelId: string;
+}
+
+/** Picks the model id for a provider, preferring one chosen for that provider. */
+function selectModelId(
+  providerId: string,
+  definition: ProviderDefinition,
+  config: Config,
+  override?: string
+): string | undefined {
+  return (
+    override ??
+    // Only reuse `ai.model` when it belongs to the provider being resolved, so
+    // switching providers cannot carry an incompatible model id across.
+    (providerId === config.ai.providerId ? config.ai.model || undefined : undefined) ??
+    config.providers?.[providerId]?.lastModel ??
+    definition.fallbackModels[0]
+  );
+}
+
+/**
+ * Describes the current selection synchronously.
+ *
+ * Used by the TUI to label the status bar before any request completes, and it
+ * deliberately does not validate credentials so an unconfigured provider still
+ * renders instead of throwing during a render pass.
+ */
+export function describeSelection(
   overrides: { providerId?: string; model?: string } = {},
   config: Config = getConfig()
-): ResolvedModel {
+): ModelSelection {
+  const providerId = overrides.providerId ?? config.ai.providerId;
+
+  try {
+    const definition = resolveProvider(providerId, config);
+    return {
+      providerId,
+      providerLabel: definition.label,
+      modelId: selectModelId(providerId, definition, config, overrides.model) ?? 'unconfigured',
+    };
+  } catch {
+    return { providerId, providerLabel: providerId, modelId: overrides.model ?? 'unconfigured' };
+  }
+}
+
+/**
+ * Resolves the configured (or explicitly requested) model.
+ *
+ * Async because subscription providers are optional dependencies loaded via
+ * dynamic import.
+ */
+export async function resolveModel(
+  overrides: { providerId?: string; model?: string } = {},
+  config: Config = getConfig()
+): Promise<ResolvedModel> {
   const providerId = overrides.providerId ?? config.ai.providerId;
   const definition = resolveProvider(providerId, config);
   const credentials = resolveCredentials(definition, config);
-
-  const modelId =
-    overrides.model ??
-    // Prefer the model chosen for this specific provider so that switching
-    // providers does not carry an incompatible model id across.
-    (providerId === config.ai.providerId ? config.ai.model : undefined) ??
-    config.providers?.[providerId]?.lastModel ??
-    definition.fallbackModels[0];
+  const modelId = selectModelId(providerId, definition, config, overrides.model);
 
   if (!modelId) {
     throw new ProviderConfigError(
@@ -137,10 +186,11 @@ export function resolveModel(
   }
 
   return {
-    model: definition.createModel(modelId, credentials),
+    model: await definition.createModel(modelId, credentials),
     modelId,
     providerId: definition.id,
     providerLabel: definition.label,
     supportsStructuredOutputs: definition.supportsStructuredOutputs,
+    supportsSamplingParams: definition.supportsSamplingParams ?? true,
   };
 }

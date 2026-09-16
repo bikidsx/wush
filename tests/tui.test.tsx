@@ -79,29 +79,29 @@ describe('Select', () => {
   });
 
   test('invokes onSelect via a hotkey', async () => {
-    let chosen: string | null = null;
+    const picked: { value: string | null } = { value: null };
     const { stdin, unmount } = render(
-      <Select items={items} onSelect={(value) => (chosen = value)} />
+      <Select items={items} onSelect={(value) => (picked.value = value)} />
     );
 
     stdin.write('r');
     await wait(50);
     unmount();
 
-    expect(chosen).toBe('regenerate');
+    expect(picked.value).toBe('regenerate');
   });
 
   test('ignores input while disabled', async () => {
-    let chosen: string | null = null;
+    const picked: { value: string | null } = { value: null };
     const { stdin, unmount } = render(
-      <Select items={items} onSelect={(value) => (chosen = value)} disabled />
+      <Select items={items} onSelect={(value) => (picked.value = value)} disabled />
     );
 
     stdin.write('a');
     await wait(50);
     unmount();
 
-    expect(chosen).toBeNull();
+    expect(picked.value).toBeNull();
   });
 });
 

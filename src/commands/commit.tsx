@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { GitService } from '../services/git.js';
 import { generateCommitMessage } from '../services/ai/tasks.js';
 import { formatCommitMessage, type CommitMessageOutput } from '../services/ai/schemas.js';
-import { toFriendlyError } from '../services/ai/errors.js';
+import { friendlyError } from '../services/ai/friendly.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/config.js';
 import { runTui, supportsTui } from '../tui/run.js';
@@ -189,7 +189,7 @@ async function commitWithPrompts(diff: string, git: GitService): Promise<void> {
       return;
     }
   } catch (error) {
-    const friendly = toFriendlyError(error);
+    const friendly = friendlyError(error);
     logger.error(friendly.message);
     if (friendly.hint) logger.dim(`  ${friendly.hint}`);
     process.exit(1);

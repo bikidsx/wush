@@ -13,6 +13,7 @@
 import { config, getConfig } from '../../utils/config.js';
 import { resolveCredentials, resolveProvider } from './model.js';
 import { classify, selectable } from './modelFilter.js';
+import { loadCodexCliProvider } from './optionalProviders.js';
 import type { ProviderDefinition } from './registry.js';
 import type { ModelInfo, ModelKind } from '../../types/index.js';
 
@@ -70,6 +71,21 @@ async function discover(definition: ProviderDefinition): Promise<ModelInfo[]> {
       description: m.description ?? undefined,
       // The gateway reports capability directly, so no inference is needed.
       kind: m.modelType === undefined || m.modelType === null ? undefined : mapGatewayKind(m.modelType),
+    }));
+  }
+
+  if (kind === 'codex-cli') {
+    const { listModels: listCodexModels } = await loadCodexCliProvider();
+    const result = await listCodexModels();
+
+    return result.models.map((m) => ({
+      id: m.id,
+      label: m.displayName ?? m.name ?? undefined,
+      description: m.description ?? undefined,
+      // Codex marks models it hides from its own picker; respect that.
+      deprecated: m.hidden === true || undefined,
+      deprecationNote: m.hidden === true ? 'hidden by the Codex CLI' : undefined,
+      kind: 'language' as const,
     }));
   }
 

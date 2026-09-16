@@ -4,8 +4,7 @@ import TextInput from 'ink-text-input';
 import { GitService } from '../../services/git.js';
 import { generateCommitMessage } from '../../services/ai/tasks.js';
 import { formatCommitMessage, type CommitMessageOutput } from '../../services/ai/schemas.js';
-import { resolveModel } from '../../services/ai/model.js';
-import { toFriendlyError } from '../../services/ai/errors.js';
+import { describeSelection } from '../../services/ai/model.js';
 import { useAITask } from '../hooks/useAITask.js';
 import { Thinking } from '../components/Thinking.js';
 import { Select, type SelectItem } from '../components/Select.js';
@@ -29,14 +28,12 @@ export function CommitView({ diff, stagedFiles, onExit }: CommitViewProps) {
   const [editValue, setEditValue] = useState('');
   const [commitError, setCommitError] = useState<string | null>(null);
 
-  // Resolved once so the status bar can name the model before any call returns.
+  // Resolved synchronously so the status bar can name the model before any
+  // call returns. Credentials are not validated here, so an unconfigured
+  // provider still renders rather than throwing during a render pass.
   const [modelInfo] = useState(() => {
-    try {
-      const resolved = resolveModel();
-      return { label: resolved.providerLabel, model: resolved.modelId };
-    } catch {
-      return { label: 'unknown', model: 'unconfigured' };
-    }
+    const selection = describeSelection();
+    return { label: selection.providerLabel, model: selection.modelId };
   });
 
   const task = useCallback(
@@ -75,8 +72,9 @@ export function CommitView({ diff, stagedFiles, onExit }: CommitViewProps) {
         await new GitService().commit(message);
         finish({ committed: true, message });
       } catch (error) {
-        const friendly = toFriendlyError(error);
-        setCommitError(friendly.message);
+        // A git failure, not a provider failure, so it is reported verbatim
+        // rather than through the AI error mapper.
+        setCommitError(error instanceof Error ? error.message : String(error));
         setStage('review');
       }
     },

@@ -20,11 +20,13 @@ import { createGroq } from '@ai-sdk/groq';
 import { createAzure } from '@ai-sdk/azure';
 import { createGateway } from '@ai-sdk/gateway';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { loadClaudeCodeProvider, loadCodexCliProvider } from './optionalProviders.js';
 
 /** How a provider authenticates. */
 export type AuthMode =
   | 'api-key' // requires a secret
-  | 'none'; // local / unauthenticated (e.g. default Ollama)
+  | 'none' // local / unauthenticated (e.g. default Ollama)
+  | 'subscription'; // delegates to a vendor CLI the user already logged into
 
 /**
  * How to enumerate models at runtime. The concrete fetching lives in
@@ -33,14 +35,15 @@ export type AuthMode =
  */
 export interface ModelDiscovery {
   /**
-   * `openai`   -> GET {baseUrl}/models        -> { data: [{ id }] }
-   * `anthropic`-> GET {baseUrl}/models        -> { data: [{ id, display_name }] }
-   * `google`   -> GET {baseUrl}/models        -> { models: [{ name, displayName }] }
-   * `ollama`   -> GET {baseUrl}/api/tags      -> { models: [{ name }] }
-   * `gateway`  -> gateway.getAvailableModels()
-   * `none`     -> not enumerable (e.g. Azure deployments)
+   * `openai`     -> GET {baseUrl}/models        -> { data: [{ id }] }
+   * `anthropic`  -> GET {baseUrl}/models        -> { data: [{ id, display_name }] }
+   * `google`     -> GET {baseUrl}/models        -> { models: [{ name, displayName }] }
+   * `ollama`     -> GET {baseUrl}/api/tags      -> { models: [{ name }] }
+   * `gateway`    -> gateway.getAvailableModels()
+   * `codex-cli`  -> listModels() from the Codex CLI app-server
+   * `none`       -> not enumerable (e.g. Azure deployments)
    */
-  kind: 'openai' | 'anthropic' | 'google' | 'ollama' | 'gateway' | 'none';
+  kind: 'openai' | 'anthropic' | 'google' | 'ollama' | 'gateway' | 'codex-cli' | 'none';
   /** Overrides the provider baseUrl when the listing endpoint differs. */
   baseUrl?: string;
   /** Sends the key as this header instead of `Authorization: Bearer`. */
@@ -83,8 +86,32 @@ export interface ProviderDefinition {
    * strict JSON schema output. Used to pick the structured-output strategy.
    */
   supportsStructuredOutputs: boolean;
-  /** Builds a concrete AI SDK model handle. */
-  createModel(modelId: string, credentials: ProviderCredentials): LanguageModel;
+  /**
+   * False when the provider ignores `temperature` / `maxOutputTokens`.
+   *
+   * The CLI-backed providers do not accept them and emit an AI SDK warning per
+   * call if they are sent, so the task layer omits them instead.
+   */
+  supportsSamplingParams?: boolean;
+  /**
+   * Executable that must be installed and logged in for a `subscription`
+   * provider, e.g. `claude` or `codex`. Used to give a precise error instead
+   * of a spawn failure.
+   */
+  requiresCli?: string;
+  /** Human-readable instruction for making `requiresCli` usable. */
+  setupHint?: string;
+  /**
+   * Builds a concrete AI SDK model handle.
+   *
+   * May be async because subscription providers are optional dependencies
+   * loaded with a dynamic import, so that installing wush does not require
+   * Node 22 or a vendor CLI.
+   */
+  createModel(
+    modelId: string,
+    credentials: ProviderCredentials
+  ): LanguageModel | Promise<LanguageModel>;
 }
 
 /**
@@ -242,6 +269,49 @@ export const BUILTIN_PROVIDERS: ProviderDefinition[] = [
         apiKey: credentials.apiKey,
         baseURL: credentials.baseUrl,
       })(modelId);
+    },
+  },
+  {
+    id: 'claude-subscription',
+    label: 'Claude subscription (Pro/Max)',
+    description: 'Uses your Claude login via the Claude Code CLI — no API key, no token stored',
+    auth: 'subscription',
+    envKeys: [],
+    requiresBaseUrl: false,
+    // The CLI accepts aliases rather than dated model ids.
+    fallbackModels: ['sonnet', 'opus', 'haiku'],
+    discovery: { kind: 'none' },
+    builtin: true,
+    // Native constrained decoding via the Claude Agent SDK.
+    supportsStructuredOutputs: true,
+    // Claude Code rejects sampling params and warns once per call if sent.
+    supportsSamplingParams: false,
+    requiresCli: 'claude',
+    setupHint: 'Install Claude Code and run `claude login`, then pick this provider.',
+    async createModel(modelId) {
+      const { createClaudeCode } = await loadClaudeCodeProvider();
+      return createClaudeCode()(modelId);
+    },
+  },
+  {
+    id: 'chatgpt-subscription',
+    label: 'ChatGPT subscription (Plus/Pro)',
+    description: 'Uses your ChatGPT login via the Codex CLI — no API key, no token stored',
+    auth: 'subscription',
+    envKeys: [],
+    requiresBaseUrl: false,
+    fallbackModels: ['gpt-5-codex'],
+    // The Codex app-server can enumerate models.
+    discovery: { kind: 'codex-cli' },
+    builtin: true,
+    supportsStructuredOutputs: true,
+    // Codex CLI rejects sampling params and warns once per call if sent.
+    supportsSamplingParams: false,
+    requiresCli: 'codex',
+    setupHint: 'Install Codex CLI and run `codex login`, then pick this provider.',
+    async createModel(modelId) {
+      const { createCodexExec } = await loadCodexCliProvider();
+      return createCodexExec()(modelId);
     },
   },
   {

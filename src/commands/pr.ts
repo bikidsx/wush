@@ -5,7 +5,7 @@ import { Octokit } from '@octokit/rest';
 import { GitService } from '../services/git.js';
 import { generatePRDescription } from '../services/ai/tasks.js';
 import { formatPRBody } from '../services/ai/schemas.js';
-import { toFriendlyError } from '../services/ai/errors.js';
+import { friendlyError } from '../services/ai/friendly.js';
 import { logger } from '../utils/logger.js';
 import { getConfig } from '../utils/config.js';
 
@@ -153,7 +153,7 @@ export async function prCommand(options: PROptions): Promise<void> {
     }
   } catch (error: any) {
     spinner.stop();
-    const friendly = toFriendlyError(error);
+    const friendly = friendlyError(error);
     logger.error(friendly.message);
     if (friendly.hint) logger.dim(`  ${friendly.hint}`);
     process.exit(1);
